@@ -1,0 +1,66 @@
+# Development Dockerfile with Node for hot-reload
+FROM php:8.4-apache-bookworm
+
+# Install system dependencies including build tools for PECL and Node
+RUN apt-get update && apt-get install -y \
+    $PHPIZE_DEPS \
+    gettext-base \
+    libzip-dev \
+    git \
+    libxml2-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    libonig-dev \
+    unzip \
+    curl \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure and install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_mysql zip gd bcmath mbstring exif pcntl \
+    && docker-php-ext-enable pdo_mysql zip gd bcmath mbstring exif pcntl
+
+# Install Redis extension via PECL
+RUN pecl install redis \
+    && docker-php-ext-enable redis
+
+# Clean up build dependencies to reduce image size
+RUN apt-get purge -y --auto-remove $PHPIZE_DEPS
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
+
+# Install pnpm globally for development
+RUN npm install -g pnpm@10.12.3
+
+# Enable Apache mod_rewrite
+RUN a2enmod rewrite
+
+# Configure Apache DocumentRoot and Directory settings
+RUN sed -i 's!DocumentRoot /var/www/html!DocumentRoot /var/www/html/public!g' /etc/apache2/sites-available/000-default.conf \
+    && echo '\n<Directory /var/www/html/public>\n\
+    Options Indexes FollowSymLinks\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>' >> /etc/apache2/apache2.conf
+
+# Copy custom PHP configuration
+COPY docker/config/php.ini /usr/local/etc/php/conf.d/50-custom-php.ini
+
+# Copy development entrypoint script
+COPY docker/app/docker-entrypoint-dev.sh /usr/local/bin/docker-entrypoint-dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-dev.sh
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Expose port 80 for Apache and 5173 for Vite
+EXPOSE 80 5173
+
+# Start Apache
+CMD ["apache2-foreground"]

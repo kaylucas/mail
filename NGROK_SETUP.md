@@ -1,0 +1,380 @@
+# ngrok Tunnel Setup for Microsoft OAuth Testing
+
+This guide explains how to use ngrok to create a public tunnel to your local development environment, allowing Microsoft's OAuth servers to reach your application for authentication callbacks.
+
+## Why ngrok?
+
+- Microsoft OAuth requires a publicly accessible redirect URI
+- Local URLs (http://mail.loc, http://localhost) are not accessible from the internet
+- ngrok creates a secure tunnel from a public URL to your local application
+- No changes to your application code or configuration are needed (except redirect URI)
+
+## Prerequisites
+
+- ngrok account with custom domain configured (aery.eu.ngrok.io)
+- Local application running at http://mail.loc via Docker + Traefik
+- Traefik proxy network configured and running
+
+## Step 1: Verify Local Application
+
+1. Ensure Docker containers are running:
+   ```bash
+   docker-compose ps
+   ```
+
+2. Verify Traefik is routing to mail.loc:
+   ```bash
+   curl -I http://mail.loc
+   ```
+
+3. Open browser to http://mail.loc and confirm the application loads
+
+4. Check that http://localhost:5173 shows the frontend dev server
+
+## Step 2: Configure ngrok Tunnel
+
+1. **Install ngrok:**
+   ```bash
+   # macOS
+   brew install ngrok
+
+   # Or download from https://ngrok.com
+   ```
+
+2. **Authenticate:**
+   ```bash
+   ngrok authtoken YOUR_AUTH_TOKEN
+   ```
+
+3. **Start the tunnel with host header rewriting:**
+   ```bash
+   ngrok http --domain=aery.eu.ngrok.io --host-header=rewrite mail.loc:80
+   ```
+
+   Alternative if Traefik is on a different port:
+   ```bash
+   ngrok http --domain=aery.eu.ngrok.io --host-header=mail.loc 80
+   ```
+
+4. **Verify tunnel status** in ngrok dashboard or terminal output
+
+5. **Test external access:** Open https://aery.eu.ngrok.io in a browser
+
+6. You should see the same application as http://mail.loc
+
+## Step 3: Configure Azure App Registration
+
+Navigate to Azure Portal: https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RegisteredApps
+
+### A. Create or Select App Registration
+
+- If creating new: Click "New registration"
+- Name: "Mail Application" (or your preference)
+- Supported account types: "Accounts in any organizational directory (Any Azure AD directory - Multitenant) and personal Microsoft accounts"
+- Click "Register"
+
+### B. Configure Redirect URIs
+
+1. Navigate to "Authentication" in the left sidebar
+2. Under "Platform configurations", click "Add a platform" (or "Add URI" if platform exists)
+3. Select "Web"
+4. Add THREE redirect URIs:
+   - `https://aery.eu.ngrok.io/auth/microsoft/callback` ← **Primary for OAuth via ngrok**
+   - `http://mail.loc/auth/microsoft/callback` ← For direct local testing (won't work for OAuth)
+   - `http://localhost:5173/auth/microsoft/callback` ← For frontend dev server (won't work for OAuth)
+5. Click "Save"
+
+**Why multiple URIs?** While only the ngrok URL will work for actual OAuth (Microsoft needs to reach it), having all three documented helps with local testing and debugging.
+
+### C. Configure API Permissions
+
+1. Navigate to "API permissions"
+2. Click "Add a permission" → "Microsoft Graph" → "Delegated permissions"
+3. Add the following permissions:
+   - **OpenId permissions**:
+     - `openid` - Sign users in
+     - `profile` - View users' basic profile
+     - `email` - View users' email address
+     - `offline_access` - Maintain access to data (refresh tokens)
+   - **Mail permissions**:
+     - `Mail.Read` - Read user mail
+4. Click "Add permissions"
+5. If you have admin rights, click "Grant admin consent for [Organization]"
+6. If not, users will consent on first login
+
+### D. Create Client Secret
+
+1. Navigate to "Certificates & secrets"
+2. Under "Client secrets", click "New client secret"
+3. Description: "Mail App Development Secret"
+4. Expires: Choose duration (recommend 12-24 months for development)
+5. Click "Add"
+6. **IMMEDIATELY COPY THE SECRET VALUE** - it will only be shown once
+7. Store it securely - you'll need it for the .env file
+
+### E. Copy Application Credentials
+
+1. Navigate to "Overview"
+2. Copy "Application (client) ID" - this is your `OFFICE365_CLIENT_ID`
+3. Copy "Directory (tenant) ID" - optional, can use "common" for multitenant
+
+## Step 4: Update .env File
+
+Your `.env` file should already have these values from local development. Verify they are correct:
+
+```env
+# Application URL - KEEP AS LOCAL URL
+APP_URL=http://mail.loc
+
+# Sanctum domains - KEEP AS LOCAL DOMAINS
+SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1
+
+# CORS origins - KEEP AS LOCAL ORIGINS
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+
+# Session - KEEP AS HTTP SETTINGS
+SESSION_SECURE_COOKIE=false
+SESSION_SAME_SITE=none
+SESSION_DOMAIN=null
+
+# Microsoft OAuth - ADD YOUR AZURE CREDENTIALS
+OFFICE365_TENANT_ID=common
+OFFICE365_CLIENT_ID=your-client-id-from-azure
+OFFICE365_CLIENT_SECRET=your-client-secret-from-azure
+OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback
+OFFICE365_SCOPES="openid,profile,email,offline_access,Mail.Read"
+```
+
+**Important:** The `OFFICE365_REDIRECT_URI` should use the ngrok URL (`https://aery.eu.ngrok.io/auth/microsoft/callback`) because:
+- The application generates the OAuth URL with this redirect URI
+- Microsoft redirects the user to this URL after authentication
+- ngrok forwards the request to `http://mail.loc/auth/microsoft/callback`
+- The application receives the callback at its local URL
+
+## Step 5: Verify Trusted Proxy Configuration
+
+The application is already configured to trust proxies like ngrok. This is **essential** for maintaining sessions through the OAuth flow.
+
+**Why this matters:**
+- ngrok forwards requests and adds headers like `X-Forwarded-Host`, `X-Forwarded-Proto`
+- Laravel needs to trust these headers to know the original request came from `https://aery.eu.ngrok.io`
+- Without trusted proxies, Laravel thinks all requests come from `http://mail.loc`
+- This breaks session cookies and causes "Invalid state parameter" errors
+
+**Configuration files:**
+- `bootstrap/app.php` - Registers trusted proxy middleware with `$middleware->trustProxies(at: '*')`
+- `app/Http/Middleware/TrustProxies.php` - Configures which headers to trust
+
+**Verify configuration:**
+```bash
+# Check that TrustProxies middleware exists
+cat app/Http/Middleware/TrustProxies.php
+
+# Should show: protected $proxies = '*';
+```
+
+This configuration is already in place - no action needed!
+
+## Step 6: Restart Application
+
+```bash
+docker-compose restart app
+```
+
+No need to rebuild - just restart to pick up the new environment variables.
+
+## Step 7: Test the OAuth Flow
+
+1. **Open the application:** Navigate to http://localhost:5173 in your browser
+
+2. **Click "Sign in with Microsoft":** This should redirect you to Microsoft's login page
+
+3. **Check the redirect URL:** In the browser address bar, you should see `login.microsoftonline.com` with a `redirect_uri` parameter containing `https://aery.eu.ngrok.io/auth/microsoft/callback`
+
+4. **Sign in:** Enter your Microsoft credentials
+
+5. **Grant consent:** If prompted, grant the requested permissions
+
+6. **Callback:** Microsoft will redirect to `https://aery.eu.ngrok.io/auth/microsoft/callback?code=...`
+
+7. **ngrok forwards:** The request goes through ngrok to `http://mail.loc/auth/microsoft/callback`
+
+8. **Application processes:** Laravel exchanges the code for tokens and logs you in
+
+9. **Final redirect:** You should be redirected to the dashboard at http://localhost:5173/#/dashboard
+
+## Step 8: Verify Connection
+
+- Dashboard should show "Connected to Microsoft 365"
+- User profile information should be displayed
+- Token expiration date should be shown
+
+## Troubleshooting
+
+### Issue: "Redirect URI mismatch" error from Microsoft
+
+**Cause:** The redirect URI in the OAuth request doesn't match Azure configuration
+
+**Solution:**
+- Verify `OFFICE365_REDIRECT_URI` in .env is `https://aery.eu.ngrok.io/auth/microsoft/callback`
+- Check Azure App Registration has this exact URI (no trailing slash, correct protocol)
+- Restart the app after changing .env: `docker-compose restart app`
+
+### Issue: "This site can't be reached" when Microsoft redirects
+
+**Cause:** ngrok tunnel is not running or not configured correctly
+
+**Solution:**
+- Check ngrok is running: Look for the ngrok terminal window
+- Verify tunnel URL: Should show "Forwarding https://aery.eu.ngrok.io -> http://mail.loc:80"
+- Test tunnel: Open https://aery.eu.ngrok.io in a browser - should show your app
+- Check host header: Use `--host-header=rewrite` or `--host-header=mail.loc`
+
+### Issue: "Invalid state parameter" error
+
+**Cause:** Session not being maintained through ngrok tunnel - Laravel doesn't trust the proxy headers
+
+**Solution:**
+- Verify trusted proxy configuration is in place (see Step 5)
+- Check `bootstrap/app.php` has `$middleware->trustProxies(at: '*')`
+- Ensure `app/Http/Middleware/TrustProxies.php` exists and has `$proxies = '*'`
+- Restart the application: `docker-compose restart app`
+- Clear sessions: `docker-compose exec app php artisan cache:clear`
+
+### Issue: "CSRF token mismatch" after callback
+
+**Cause:** Session cookies not being maintained through the OAuth flow
+
+**Solution:**
+- Verify `SESSION_SAME_SITE=none` in .env
+- Check browser is not blocking third-party cookies
+- Clear browser cookies and try again
+- Check that `SANCTUM_STATEFUL_DOMAINS` includes all relevant domains
+- Ensure trusted proxy configuration is correct (see "Invalid state parameter" solution above)
+
+### Issue: Application loads at aery.eu.ngrok.io but OAuth fails
+
+**Cause:** Application is receiving requests with aery.eu.ngrok.io host header
+
+**Solution:**
+- Use `--host-header=rewrite` flag in ngrok command
+- This makes the application think requests are coming to mail.loc
+- Restart ngrok with: `ngrok http --domain=aery.eu.ngrok.io --host-header=rewrite mail.loc:80`
+
+### Issue: "Invalid client secret" error
+
+**Cause:** Client secret in .env doesn't match Azure
+
+**Solution:**
+- Verify `OFFICE365_CLIENT_SECRET` is correct (no extra spaces)
+- If lost, generate a new secret in Azure and update .env
+- Restart app after updating: `docker-compose restart app`
+
+## Keeping ngrok Running
+
+For continuous development:
+1. Run ngrok in a separate terminal window/tab
+2. Or use a terminal multiplexer like tmux/screen
+3. Or run ngrok as a background service
+4. ngrok will automatically reconnect if connection drops
+
+## Security Notes
+
+- The ngrok tunnel exposes your local application to the internet
+- Only use for development/testing, not production
+- Keep the tunnel URL private (don't share publicly)
+- Monitor ngrok dashboard for unexpected traffic
+- Stop the tunnel when not needed: Ctrl+C in ngrok terminal
+
+## Alternative: ngrok Configuration File
+
+Create `~/.ngrok2/ngrok.yml`:
+
+```yaml
+version: "2"
+authtoken: YOUR_AUTH_TOKEN
+tunnels:
+  mail:
+    proto: http
+    domain: aery.eu.ngrok.io
+    addr: mail.loc:80
+    host_header: rewrite
+```
+
+Then start with: `ngrok start mail`
+
+## OAuth Flow Diagram
+
+```
+┌──────────┐
+│  User    │
+└────┬─────┘
+     │ 1. Visit http://localhost:5173
+     ▼
+┌──────────────────────┐
+│  Frontend (Vite)     │
+│  localhost:5173      │
+└──────┬───────────────┘
+       │ 2. Click "Sign in with Microsoft"
+       │    GET http://mail.loc/auth/microsoft
+       ▼
+┌──────────────────────────────────────────────┐
+│  Backend (Laravel)                           │
+│  http://mail.loc                             │
+│  - Generate OAuth URL                        │
+│  - redirect_uri=https://aery.eu.ngrok.io/...  │
+└──────┬───────────────────────────────────────┘
+       │ 3. Redirect to Microsoft
+       ▼
+┌──────────────────────────────────────────────┐
+│  Microsoft OAuth                             │
+│  login.microsoftonline.com                   │
+│  - User authenticates                        │
+│  - User consents to permissions              │
+└──────┬───────────────────────────────────────┘
+       │ 4. Redirect to callback
+       │    https://aery.eu.ngrok.io/auth/microsoft/callback?code=xxx
+       ▼
+┌──────────────────────────────────────────────┐
+│  ngrok Tunnel                                │
+│  aery.eu.ngrok.io                              │
+│  - Forwards HTTPS → HTTP                     │
+│  - Rewrites host header to mail.loc          │
+└──────┬───────────────────────────────────────┘
+       │ 5. Forward to local backend
+       │    http://mail.loc/auth/microsoft/callback?code=xxx
+       ▼
+┌──────────────────────────────────────────────┐
+│  Backend (Laravel)                           │
+│  - Exchange code for tokens                  │
+│  - Get user profile from Graph API           │
+│  - Create/update User & Office365Connection  │
+│  - Login user                                │
+└──────┬───────────────────────────────────────┘
+       │ 6. Redirect to dashboard
+       │    http://localhost:5173/#/dashboard
+       ▼
+┌──────────────────────┐
+│  Frontend (Vite)     │
+│  - Fetch /api/user   │
+│  - Show dashboard    │
+└──────────────────────┘
+```
+
+## Summary
+
+**What changes:**
+- Azure App Registration: Add `https://aery.eu.ngrok.io/auth/microsoft/callback` as redirect URI
+- .env: Set `OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback`
+
+**What stays the same:**
+- All other .env variables (APP_URL, SANCTUM_STATEFUL_DOMAINS, CORS, SESSION)
+- Application continues to run at http://mail.loc
+- Frontend continues to run at http://localhost:5173
+- No code or configuration file changes
+
+**How it works:**
+- ngrok is a tunnel/proxy layer, not a deployment target
+- Application runs locally with HTTP configuration
+- ngrok forwards external HTTPS requests to local HTTP
+- Only used for OAuth callback - all other traffic is local

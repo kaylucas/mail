@@ -1,0 +1,12 @@
+# Development override with Node for hot-reload
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.dev.yml up
+# This adds Node/pnpm to the container for frontend hot-reload during development
+services:
+  app:
+    build:
+      dockerfile: docker/app/Dockerfile.dev
+    environment:
+      - VITE_HOST=0.0.0.0
+    ports:
+      - '${APP_PORT:-80}:80'
+      - '5173:5173'  # Vite dev server

@@ -1,0 +1,70 @@
+# Version Control
+.git/
+.github/
+.gitattributes
+.gitignore
+
+# Dependencies (will be installed during build)
+node_modules/
+vendor/
+
+# Storage directories (exclude cached/temporary files)
+storage/app/*
+!storage/app/.gitignore
+storage/framework/cache/*
+!storage/framework/cache/.gitignore
+storage/framework/sessions/*
+!storage/framework/sessions/.gitignore
+storage/framework/views/*
+!storage/framework/views/.gitignore
+storage/logs/*
+!storage/logs/.gitignore
+
+# Bootstrap cache
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Docker example (no longer needed)
+docker-example/
+
+# Testing
+tests/
+phpunit.xml
+.phpunit.result.cache
+
+# Documentation
+*.md
+!README.md
+CLAUDE.md
+
+# Editor config
+.editorconfig
+
+# Docker compose (not needed inside image)
+docker-compose.yml
+docker-compose.*.yml
+
+# Lock files are needed for frozen installs
+# Note: package.json, composer.json, pnpm-lock.yaml, and composer.lock ARE needed
+
+# Vite dev files
+public/hot
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

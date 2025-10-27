@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CI Docker image
+        run: |
+          docker buildx build \
+            --file docker/ci/Dockerfile \
+            --tag mail-ci:latest \
+            --load \
+            .
+
+      - name: Install Composer dependencies
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            mail-ci:latest \
+            composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install Node dependencies
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            mail-ci:latest \
+            pnpm install --frozen-lockfile
+
+      - name: Build frontend assets
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            mail-ci:latest \
+            pnpm run build
+
+      - name: Copy .env.example to .env
+        run: cp .env.example .env
+
+      - name: Generate application key
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            mail-ci:latest \
+            php artisan key:generate --ansi
+
+      - name: Run database migrations
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: testing
+          DB_USERNAME: root
+          DB_PASSWORD: password
+        run: |
+          docker run --rm \
+            --network host \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            -e DB_CONNECTION=mysql \
+            -e DB_HOST=127.0.0.1 \
+            -e DB_PORT=3306 \
+            -e DB_DATABASE=testing \
+            -e DB_USERNAME=root \
+            -e DB_PASSWORD=password \
+            mail-ci:latest \
+            php artisan migrate --force --ansi
+
+      - name: Run tests
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: testing
+          DB_USERNAME: root
+          DB_PASSWORD: password
+        run: |
+          docker run --rm \
+            --network host \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            -e DB_CONNECTION=mysql \
+            -e DB_HOST=127.0.0.1 \
+            -e DB_PORT=3306 \
+            -e DB_DATABASE=testing \
+            -e DB_USERNAME=root \
+            -e DB_PASSWORD=password \
+            mail-ci:latest \
+            php artisan test --parallel
+
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CI Docker image
+        run: |
+          docker buildx build \
+            --file docker/ci/Dockerfile \
+            --tag mail-ci:latest \
+            --load \
+            .
+
+      - name: Install Composer dependencies
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            mail-ci:latest \
+            composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Run Laravel Pint
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/var/www/html \
+            -w /var/www/html \
+            mail-ci:latest \
+            vendor/bin/pint --test

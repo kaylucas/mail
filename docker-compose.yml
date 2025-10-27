@@ -1,0 +1,59 @@
+services:
+  mariadb:
+    image: mariadb:10.11
+    ports:
+      - '${FORWARD_DB_PORT:-3306}:3306'
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-mail}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    tmpfs:
+      - /var/www/html/storage/framework/cache:uid=33,gid=33
+      - /var/www/html/storage/framework/sessions:uid=33,gid=33
+      - /var/www/html/storage/framework/views:uid=33,gid=33
+      - /var/www/html/bootstrap/cache:uid=33,gid=33
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_KEY: ${APP_KEY}
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_URL: http://mail.loc
+      SANCTUM_STATEFUL_DOMAINS: localhost:5173,mail.loc,localhost,127.0.0.1
+      SESSION_SECURE_COOKIE: false
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mail-local.rule=Host(`mail.loc`)
+      - traefik.http.services.mail-local.loadbalancer.server.port=80
+    networks:
+      - default
+      - proxy
+
+volumes:
+  mariadb_data:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
+  proxy:
+    external: true
