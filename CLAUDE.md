@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Laravel 12 application with a Vue 3 SPA frontend that implements Microsoft Office 365 OAuth authentication and email integration. The application uses Laravel Sanctum for stateful SPA authentication with session-based CSRF protection.
 
+**Development Domain:** The application is developed and tested exclusively at `http://mail.loc` via Docker + Traefik. All redirects, documentation, and configuration should reference `mail.loc` as the primary development domain.
+
 ## Development Commands
 
 ### Initial Setup
@@ -55,18 +57,22 @@ php artisan migrate:rollback     # Rollback last migration
 ### Authentication Flow
 
 **Microsoft SSO Authentication (Primary):**
-1. User clicks "Sign in with Microsoft" → `/auth/microsoft` (web route)
-2. `MicrosoftAuthController::redirect()` generates OAuth state, stores it in **session** (not cache), redirects to Microsoft
-3. Microsoft redirects back to `/auth/microsoft/callback` (web route)
-4. `MicrosoftAuthController::callback()` validates state from session, exchanges code for tokens, creates/updates User and Office365Connection, logs user in, regenerates session
-5. Vue SPA uses Sanctum session cookies for authenticated API requests
+1. User clicks "Sign in with Microsoft" at `http://mail.loc` → `/auth/microsoft` (web route)
+2. `MicrosoftAuthController::redirect()` generates OAuth state, stores it in **cache**, redirects to Microsoft
+3. Microsoft redirects back to ngrok tunnel → `https://aery.eu.ngrok.io/auth/microsoft/callback` (web route)
+4. `MicrosoftAuthController::callback()` validates state from cache, exchanges code for tokens, creates/updates User and Office365Connection, logs user in
+5. **Session Transfer:** Callback creates temporary token in cache, redirects to `http://mail.loc/auth/session?token=xxx`
+6. `MicrosoftAuthController::establishSession()` validates token, logs in user on local domain, regenerates session
+7. Final redirect to `http://mail.loc/#/dashboard`
+8. Vue SPA uses Sanctum session cookies for authenticated API requests
 
 **Critical Security Details:**
-- OAuth state is stored per-session in `$request->session()`, NOT in global cache
-- State is validated and immediately forgotten after use
+- OAuth state is stored in cache (10-minute TTL) with IP validation
+- State is single-use and deleted immediately after validation
+- Session transfer uses temporary tokens (5-minute TTL) to bridge ngrok → mail.loc
 - CSRF cookie must be initialized via `axios.get('/sanctum/csrf-cookie')` before any POST requests
-- `SANCTUM_STATEFUL_DOMAINS` must include `localhost:8000` for local development
-- Session is regenerated only AFTER successful login
+- `SANCTUM_STATEFUL_DOMAINS` must include `mail.loc` for local development
+- Session is regenerated on the `mail.loc` domain after OAuth callback
 
 ### API Authentication
 
@@ -88,7 +94,7 @@ The application uses **stateful Sanctum** (not token-based). Key configuration:
 
 **User Model:**
 - Has one `Office365Connection` relationship
-- Fields: `microsoft_id`, `name`, `email`, `avatar`
+- Fields: `microsoft_id`, `name`, `email`
 - Authenticated via Microsoft OAuth (no password field used for SSO users)
 
 **Office365Connection Model:**
@@ -104,18 +110,18 @@ The application uses **stateful Sanctum** (not token-based). Key configuration:
 - `generateAuthorizationUrl(connection, state)`: Builds Microsoft OAuth URL
 - `exchangeCodeForTokens(connection, code)`: Exchanges auth code for access/refresh tokens
 - `refreshAccessToken(connection)`: Refreshes expired access token using refresh token
-- `getUserProfile(accessToken)`: Fetches user profile from Microsoft Graph API
-- `getUserPhoto(accessToken)`: Fetches user photo (returns base64 data URL or null)
-- `getGraphClient(connection)`: Returns configured Microsoft Graph SDK client
+- `getUserProfile(accessToken, ...)`: Fetches user profile from Microsoft Graph API (validates token is access token, not ID token)
+- `getGraphClient(connection)`: Returns configured Microsoft Graph SDK client with proper token context and cache
 
 All methods use config values from `config/services.php`, with optional overrides from connection model.
 
 ### Controllers
 
 **MicrosoftAuthController (Web Routes):**
-- `redirect()`: Initiates OAuth flow, stores state in session
-- `callback()`: Handles OAuth callback, creates/updates user, logs in
-- `logout()`: Logs out user, invalidates session
+- `redirect()`: Initiates OAuth flow, stores state in cache
+- `callback()`: Handles OAuth callback (on ngrok), validates state, exchanges code for tokens, creates/updates user, generates session transfer token
+- `establishSession()`: Establishes session on mail.loc domain using transfer token, logs in user, redirects to dashboard
+- `logout()`: Logs out user, invalidates session (API endpoint)
 - `user()`: Returns authenticated user with `office365Connection` relationship (API endpoint)
 
 **Office365ConnectionController (API Routes, `auth:sanctum` required):**
@@ -141,7 +147,8 @@ All methods use config values from `config/services.php`, with optional override
 
 **Web Routes (`routes/web.php`):**
 - `GET /auth/microsoft` → MicrosoftAuthController::redirect
-- `GET /auth/microsoft/callback` → MicrosoftAuthController::callback
+- `GET /auth/microsoft/callback` → MicrosoftAuthController::callback (receives callback from ngrok)
+- `GET /auth/session` → MicrosoftAuthController::establishSession (session transfer endpoint)
 - `GET /{any}` → Catch-all for Vue SPA
 
 **API Routes (`routes/api.php`, protected by `auth:sanctum`):**
@@ -156,7 +163,7 @@ All methods use config values from `config/services.php`, with optional override
 
 **users table:**
 - `microsoft_id` (nullable, unique): Microsoft Graph user ID
-- `name`, `email`, `avatar`
+- `name`, `email`
 - No password field used for SSO users
 
 **office365_connections table:**

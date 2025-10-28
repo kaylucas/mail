@@ -11,6 +11,7 @@ Route::get('/', function () {
 // Microsoft OAuth Routes
 Route::get('/auth/microsoft', [MicrosoftAuthController::class, 'redirect']);
 Route::get('/auth/microsoft/callback', [MicrosoftAuthController::class, 'callback']);
+Route::get('/auth/session', [MicrosoftAuthController::class, 'establishSession']);
 
 // Catch-all route for Vue Router (must be last)
 Route::get('/{any}', function () {

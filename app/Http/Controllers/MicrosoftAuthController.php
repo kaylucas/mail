@@ -29,7 +29,7 @@ class MicrosoftAuthController extends Controller
             $clientSecret = config('services.office365.client_secret');
             $redirectUri = config('services.office365.redirect_uri');
             $tenantId = config('services.office365.tenant_id');
-            $scopes = 'openid profile email offline_access Mail.Read';
+            $scopes = 'openid profile email offline_access User.Read Mail.Read';
 
             Log::info('OAuth redirect initiated', [
                 'session_id' => $request->session()->getId(),
@@ -159,7 +159,7 @@ class MicrosoftAuthController extends Controller
             $clientSecret = config('services.office365.client_secret');
             $redirectUri = config('services.office365.redirect_uri');
             $tenantId = config('services.office365.tenant_id');
-            $scopes = 'openid profile email offline_access Mail.Read';
+            $scopes = 'openid profile email offline_access User.Read Mail.Read';
 
             // Create temporary connection for token exchange
             $tempConnection = new Office365Connection([
@@ -173,11 +173,9 @@ class MicrosoftAuthController extends Controller
             // Exchange code for tokens
             $tokens = $this->service->exchangeCodeForTokens($tempConnection, $code);
 
-            // Fetch user profile from Microsoft Graph
+            // Fetch user profile from Microsoft Graph using the OAuth access token
+            // IMPORTANT: Use access_token (for Graph API), not id_token (for authentication only)
             $profile = $this->service->getUserProfile($tokens['access_token']);
-
-            // Try to get user photo
-            $avatar = $this->service->getUserPhoto($tokens['access_token']);
 
             // Extract user data
             $microsoftId = $profile['id'];
@@ -195,7 +193,6 @@ class MicrosoftAuthController extends Controller
                     'name' => $name,
                     'email' => $email,
                     'microsoft_id' => $microsoftId,
-                    'avatar' => $avatar,
                 ]);
             } else {
                 // Create new user
@@ -203,7 +200,6 @@ class MicrosoftAuthController extends Controller
                     'name' => $name,
                     'email' => $email,
                     'microsoft_id' => $microsoftId,
-                    'avatar' => $avatar,
                 ]);
             }
 
@@ -224,16 +220,21 @@ class MicrosoftAuthController extends Controller
 
             // Log the user in
             Auth::login($user);
-            $request->session()->regenerate();
+
+            // Store user ID in cache for session transfer
+            $sessionToken = Str::random(60);
+            Cache::put("auth_session_{$sessionToken}", $user->id, now()->addMinutes(5));
 
             Log::info('User authenticated successfully', [
                 'user_id' => $user->id,
                 'user_email' => $user->email,
-                'new_session_id' => $request->session()->getId(),
+                'session_token' => $sessionToken,
             ]);
 
-            // Redirect to dashboard
-            return redirect('/#/dashboard');
+            // Redirect to local backend to establish session, then to frontend
+            // This is necessary because the OAuth callback happens on ngrok (HTTPS) but
+            // the app runs on mail.loc (HTTP). We need to establish the session on the correct domain.
+            return redirect("http://mail.loc/auth/session?token={$sessionToken}&redirect=" . urlencode('http://mail.loc/#/dashboard'));
         } catch (Exception $e) {
             Log::error('Microsoft auth callback failed', [
                 'message' => $e->getMessage(),
@@ -241,6 +242,59 @@ class MicrosoftAuthController extends Controller
             ]);
 
             return redirect('/#/?error=auth_failed');
+        }
+    }
+
+    /**
+     * Establish session on the local domain after OAuth callback.
+     * This is needed because OAuth callback happens on ngrok (HTTPS) but
+     * the app runs on mail.loc (HTTP), and session cookies need to be
+     * established on the correct domain.
+     */
+    public function establishSession(Request $request)
+    {
+        try {
+            $token = $request->query('token');
+            $redirect = $request->query('redirect', 'http://mail.loc/#/dashboard');
+
+            if (!$token) {
+                throw new Exception('Missing session token');
+            }
+
+            // Get user ID from cache
+            $cacheKey = "auth_session_{$token}";
+            $userId = Cache::get($cacheKey);
+
+            if (!$userId) {
+                throw new Exception('Invalid or expired session token');
+            }
+
+            // Delete the token from cache (single use)
+            Cache::forget($cacheKey);
+
+            // Find user
+            $user = User::find($userId);
+            if (!$user) {
+                throw new Exception('User not found');
+            }
+
+            // Log the user in and regenerate session
+            Auth::login($user);
+            $request->session()->regenerate();
+
+            Log::info('Session established on local domain', [
+                'user_id' => $user->id,
+                'session_id' => $request->session()->getId(),
+            ]);
+
+            // Redirect to frontend
+            return redirect($redirect);
+        } catch (Exception $e) {
+            Log::error('Session establishment failed', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return redirect('http://mail.loc/#/?error=session_failed');
         }
     }
 

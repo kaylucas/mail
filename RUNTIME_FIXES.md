@@ -248,3 +248,89 @@ mail-app-1       Up
 3. **For CI/CD:**
    - GitHub Actions workflow is ready to use
    - Ensure secrets are configured for production deployments
+
+---
+
+## Microsoft OAuth Fixes (2025-10-27)
+
+### Issue 1: Class "Microsoft\Graph\Graph" not found
+
+**Problem:**
+The application was using Microsoft Graph SDK v1.x API syntax (`new Graph()`, `createRequest()`, `setReturnType()`) but `composer.json` specified v2.x (`"microsoft/microsoft-graph": "^2.49"`). The v2.x SDK has completely different classes and API structure.
+
+**Root Cause:**
+- Code in `app/Services/Office365Service.php` was written for v1.x API
+- Composer dependency specified v2.x
+- The `Graph` class doesn't exist in v2.x (replaced by `GraphServiceClient`)
+- Dependencies may not have been installed (`vendor/` directory missing packages)
+
+**Solution:**
+1. Updated `Office365Service.php` to use v2.x API:
+   - Replaced `new Graph()` with `GraphServiceClient::createWithAuthenticationProvider()`
+   - Updated `getUserProfile()` to use `$graphServiceClient->me()->get()->wait()`
+   - Updated `getUserPhoto()` to use `$graphServiceClient->me()->photo()->content()->get()->wait()`
+   - Changed from `createRequest()` pattern to fluent builder pattern
+   - Updated exception handling from generic `Exception` to `ApiException`
+
+2. Ran `composer install` to ensure all dependencies are installed
+
+**Files Modified:**
+- `app/Services/Office365Service.php`
+
+**References:**
+- Microsoft Graph PHP SDK v2.x documentation: https://github.com/microsoftgraph/msgraph-sdk-php
+- Migration guide: https://github.com/microsoftgraph/msgraph-sdk-php/blob/main/UPGRADING.md
+
+### Issue 2: Invalid state parameter / Session not persisting through OAuth callback
+
+**Problem:**
+When users authenticated with Microsoft OAuth through ngrok, they received "Invalid state parameter" error. Logs showed the session ID changed between the redirect and callback, causing the cached OAuth state to be lost.
+
+**Root Cause:**
+- `.env` had `APP_URL=http://mail.loc` and `SESSION_SECURE_COOKIE=false`
+- ngrok tunnel uses HTTPS: `https://aery.eu.ngrok.io`
+- When Laravel thinks it's running over HTTP but requests come through HTTPS:
+  - Session cookies are created without the `Secure` flag
+  - Browsers won't send non-secure cookies over HTTPS connections
+  - OAuth callback creates a new session, losing the state parameter
+  - State validation fails because the state was stored in the original session
+
+**Solution:**
+1. Updated `.env.example` and `NGROK_SETUP.md` to specify:
+   ```env
+   APP_URL=https://aery.eu.ngrok.io
+   SESSION_SECURE_COOKIE=true
+   SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1,aery.eu.ngrok.io
+   CORS_ALLOWED_ORIGINS=http://localhost:5173,https://aery.eu.ngrok.io
+   ```
+
+2. Added clear documentation explaining:
+   - Why `APP_URL` must be the ngrok HTTPS URL (not just the redirect URI)
+   - Why `SESSION_SECURE_COOKIE=true` is required for HTTPS
+   - How to switch between ngrok mode and local development mode
+
+3. Updated troubleshooting documentation in `README.md` and `NGROK_SETUP.md`
+
+**Files Modified:**
+- `.env.example`
+- `NGROK_SETUP.md`
+- `README.md`
+- `RUNTIME_FIXES.md` (this file)
+
+**Why TrustProxies wasn't enough:**
+While `TrustProxies` middleware was correctly configured to trust ngrok's forwarded headers, Laravel still needs `APP_URL` to be HTTPS and `SESSION_SECURE_COOKIE=true` to properly handle secure cookies. The middleware trusts the headers, but the application configuration determines cookie behavior.
+
+**Testing:**
+1. Set environment variables as documented
+2. Run `composer install`
+3. Restart application: `docker-compose restart app`
+4. Clear caches: `docker-compose exec app php artisan config:clear && php artisan cache:clear`
+5. Start ngrok: `ngrok http --domain=aery.eu.ngrok.io --host-header=rewrite mail.loc:80`
+6. Test OAuth flow: Visit http://localhost:5173, click "Sign in with Microsoft"
+7. Verify session cookies have `Secure; SameSite=None` flags in browser DevTools
+8. Confirm successful authentication and redirect to dashboard
+
+**References:**
+- Laravel session configuration: https://laravel.com/docs/session
+- SameSite cookie requirements: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite
+- ngrok with Laravel: https://ngrok.com/docs/guides/frameworks/laravel/

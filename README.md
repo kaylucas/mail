@@ -185,10 +185,9 @@ Microsoft OAuth Servers (Internet)
 ```
 
 **Key Points:**
-- The application continues to run locally at `http://mail.loc` with all existing configuration
 - ngrok acts as a reverse proxy, forwarding external HTTPS requests to local HTTP
-- No changes to `.env` configuration are needed (except `OFFICE365_REDIRECT_URI`)
-- Only Azure App Registration needs the tunnel URL added as a redirect URI
+- When using ngrok for OAuth, you must update `.env` with the ngrok URL and enable secure cookies
+- Azure App Registration needs the tunnel URL added as a redirect URI
 - Trusted proxy configuration is already in place to maintain sessions through ngrok
 
 **Quick Setup:**
@@ -215,7 +214,12 @@ Microsoft OAuth Servers (Internet)
 
 5. **Update .env:**
    ```env
+   APP_URL=https://aery.eu.ngrok.io
+   SESSION_SECURE_COOKIE=true
+   SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1,aery.eu.ngrok.io
+   CORS_ALLOWED_ORIGINS=http://localhost:5173,https://aery.eu.ngrok.io
    OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback
+   OFFICE365_SCOPES="openid,profile,email,offline_access,User.Read,Mail.Read"
    ```
 
 6. **Restart application:**
@@ -225,11 +229,62 @@ Microsoft OAuth Servers (Internet)
 
 **Important Notes:**
 - Keep the ngrok tunnel running during development/testing
-- The tunnel URL (aery.eu.ngrok.io) is only used by Microsoft for OAuth callbacks
-- Users still access the application at http://localhost:5173 (frontend) or http://mail.loc (backend)
-- All other `.env` settings remain unchanged (APP_URL, SANCTUM_STATEFUL_DOMAINS, CORS, SESSION)
+- Setting `APP_URL` to the ngrok HTTPS URL is required for session cookies to work during OAuth
+- The `User.Read` scope is required for accessing user profile via Microsoft Graph API
+- Users can access the application at http://localhost:5173 (frontend) or https://aery.eu.ngrok.io (via tunnel)
 
 **For detailed setup instructions, troubleshooting, and Azure configuration, see [NGROK_SETUP.md](NGROK_SETUP.md).**
+
+## Troubleshooting
+
+### Microsoft OAuth Errors
+
+#### Error: Class "Microsoft\Graph\Graph" not found
+
+**Cause:** The Microsoft Graph SDK dependencies are not installed.
+
+**Solution:**
+```bash
+docker-compose exec app composer install
+```
+
+This installs the `microsoft/microsoft-graph` package and its dependencies.
+
+#### Error: Invalid state parameter
+
+**Cause:** Session cookies are not being maintained through the OAuth callback flow when using ngrok.
+
+**Solution:**
+1. Ensure your `.env` file has:
+   ```env
+   APP_URL=https://aery.eu.ngrok.io
+   SESSION_SECURE_COOKIE=true
+   SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1,aery.eu.ngrok.io
+   CORS_ALLOWED_ORIGINS=http://localhost:5173,https://aery.eu.ngrok.io
+   ```
+
+2. Restart the application:
+   ```bash
+   docker-compose restart app
+   ```
+
+3. Clear caches:
+   ```bash
+   docker-compose exec app php artisan config:clear
+   docker-compose exec app php artisan cache:clear
+   ```
+
+4. Ensure ngrok is running with host header rewriting:
+   ```bash
+   ngrok http --domain=aery.eu.ngrok.io --host-header=rewrite mail.loc:80
+   ```
+
+**Why this happens:**
+- When `APP_URL` is set to HTTP but requests come through HTTPS (ngrok), browsers won't send session cookies
+- This creates a new session on the OAuth callback, losing the state parameter
+- Setting `APP_URL` to the ngrok HTTPS URL and enabling secure cookies fixes this
+
+For detailed ngrok setup instructions, see `NGROK_SETUP.md`.
 
 ## About Laravel
 

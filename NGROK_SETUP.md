@@ -96,11 +96,15 @@ Navigate to Azure Portal: https://portal.azure.com/#blade/Microsoft_AAD_IAM/Acti
      - `profile` - View users' basic profile
      - `email` - View users' email address
      - `offline_access` - Maintain access to data (refresh tokens)
+   - **User permissions**:
+     - `User.Read` - Read user profile (REQUIRED for /me endpoint)
    - **Mail permissions**:
      - `Mail.Read` - Read user mail
 4. Click "Add permissions"
 5. If you have admin rights, click "Grant admin consent for [Organization]"
 6. If not, users will consent on first login
+
+**Important:** The `User.Read` scope is required for the Microsoft Graph API `/me` endpoint to fetch user profile information. Without it, you may receive a 403 Forbidden error.
 
 ### D. Create Client Secret
 
@@ -120,20 +124,20 @@ Navigate to Azure Portal: https://portal.azure.com/#blade/Microsoft_AAD_IAM/Acti
 
 ## Step 4: Update .env File
 
-Your `.env` file should already have these values from local development. Verify they are correct:
+Your `.env` file must be configured to use the ngrok HTTPS URL. Update these values:
 
 ```env
-# Application URL - KEEP AS LOCAL URL
-APP_URL=http://mail.loc
+# Application URL - MUST USE NGROK URL FOR OAUTH
+APP_URL=https://aery.eu.ngrok.io
 
-# Sanctum domains - KEEP AS LOCAL DOMAINS
-SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1
+# Sanctum domains - ADD NGROK DOMAIN
+SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1,aery.eu.ngrok.io
 
-# CORS origins - KEEP AS LOCAL ORIGINS
-CORS_ALLOWED_ORIGINS=http://localhost:5173
+# CORS origins - ADD NGROK HTTPS URL
+CORS_ALLOWED_ORIGINS=http://localhost:5173,https://aery.eu.ngrok.io
 
-# Session - KEEP AS HTTP SETTINGS
-SESSION_SECURE_COOKIE=false
+# Session - ENABLE SECURE COOKIES FOR HTTPS
+SESSION_SECURE_COOKIE=true
 SESSION_SAME_SITE=none
 SESSION_DOMAIN=null
 
@@ -142,14 +146,16 @@ OFFICE365_TENANT_ID=common
 OFFICE365_CLIENT_ID=your-client-id-from-azure
 OFFICE365_CLIENT_SECRET=your-client-secret-from-azure
 OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback
-OFFICE365_SCOPES="openid,profile,email,offline_access,Mail.Read"
+OFFICE365_SCOPES="openid,profile,email,offline_access,User.Read,Mail.Read"
 ```
 
-**Important:** The `OFFICE365_REDIRECT_URI` should use the ngrok URL (`https://aery.eu.ngrok.io/auth/microsoft/callback`) because:
-- The application generates the OAuth URL with this redirect URI
-- Microsoft redirects the user to this URL after authentication
-- ngrok forwards the request to `http://mail.loc/auth/microsoft/callback`
-- The application receives the callback at its local URL
+**Why APP_URL must be the ngrok HTTPS URL:**
+- Laravel uses `APP_URL` to determine if the application is running over HTTPS
+- When `APP_URL` is HTTP but requests come through HTTPS (via ngrok), session cookies don't work properly
+- Browsers require `Secure` flag on cookies for HTTPS sites
+- With `APP_URL=http://mail.loc` and `SESSION_SECURE_COOKIE=false`, cookies are created as HTTP-only
+- When Microsoft redirects back via HTTPS, the browser won't send HTTP-only cookies
+- This creates a new session, losing the OAuth state, causing "Invalid state parameter" error
 
 ## Step 5: Verify Trusted Proxy Configuration
 
@@ -178,10 +184,16 @@ This configuration is already in place - no action needed!
 ## Step 6: Restart Application
 
 ```bash
-docker-compose restart app
-```
+# Install dependencies (if not already done)
+docker-compose exec app composer install
 
-No need to rebuild - just restart to pick up the new environment variables.
+# Restart to pick up new environment variables
+docker-compose restart app
+
+# Clear caches
+docker-compose exec app php artisan config:clear
+docker-compose exec app php artisan cache:clear
+```
 
 ## Step 7: Test the OAuth Flow
 
@@ -232,14 +244,15 @@ No need to rebuild - just restart to pick up the new environment variables.
 
 ### Issue: "Invalid state parameter" error
 
-**Cause:** Session not being maintained through ngrok tunnel - Laravel doesn't trust the proxy headers
+**Cause:** Session not being maintained through ngrok tunnel
 
 **Solution:**
+- Verify `APP_URL=https://aery.eu.ngrok.io` in .env (not http://mail.loc)
+- Verify `SESSION_SECURE_COOKIE=true` in .env
 - Verify trusted proxy configuration is in place (see Step 5)
-- Check `bootstrap/app.php` has `$middleware->trustProxies(at: '*')`
-- Ensure `app/Http/Middleware/TrustProxies.php` exists and has `$proxies = '*'`
+- Run `composer install` to ensure Microsoft Graph SDK is installed
 - Restart the application: `docker-compose restart app`
-- Clear sessions: `docker-compose exec app php artisan cache:clear`
+- Clear caches: `docker-compose exec app php artisan config:clear && php artisan cache:clear`
 
 ### Issue: "CSRF token mismatch" after callback
 
@@ -365,16 +378,21 @@ Then start with: `ngrok start mail`
 
 **What changes:**
 - Azure App Registration: Add `https://aery.eu.ngrok.io/auth/microsoft/callback` as redirect URI
+- .env: Set `APP_URL=https://aery.eu.ngrok.io` (CRITICAL - not http://mail.loc)
 - .env: Set `OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback`
+- .env: Set `SESSION_SECURE_COOKIE=true`
+- .env: Add ngrok domain to `SANCTUM_STATEFUL_DOMAINS` and `CORS_ALLOWED_ORIGINS`
+- Run: `composer install` to ensure dependencies are installed
 
 **What stays the same:**
-- All other .env variables (APP_URL, SANCTUM_STATEFUL_DOMAINS, CORS, SESSION)
-- Application continues to run at http://mail.loc
+- Application continues to run at http://mail.loc internally
 - Frontend continues to run at http://localhost:5173
-- No code or configuration file changes
+- No code changes needed (after updating to Graph SDK v2.x)
+- Traefik and Docker configuration unchanged
 
 **How it works:**
 - ngrok is a tunnel/proxy layer, not a deployment target
-- Application runs locally with HTTP configuration
+- Application thinks it's running over HTTPS (via APP_URL setting)
 - ngrok forwards external HTTPS requests to local HTTP
+- Session cookies have Secure flag, work properly through HTTPS
 - Only used for OAuth callback - all other traffic is local
