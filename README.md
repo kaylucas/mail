@@ -52,17 +52,20 @@ pnpm run dev
 ```
 
 7. **Access the application:**
-   - Frontend: http://localhost:5173
-   - Backend API: http://mail.loc (accessed via Traefik, proxied by Vite for API calls)
+   - **Application**: http://mail.loc (ALWAYS use this URL)
+   - **Vite dev server**: http://localhost:5173 (for hot-reload only, do NOT access directly)
+   - **Backend API**: http://mail.loc/api (same domain as frontend)
 
 ### How It Works
 
 - **Backend**: Laravel runs in Docker, accessible at `http://mail.loc` via Traefik reverse proxy
-- **Frontend**: Vue/Vite runs locally on host at `http://localhost:5173`
-- **Proxying**: Vite proxies `/api`, `/auth`, and `/sanctum` requests to `http://mail.loc`
-- **Authentication**: Sanctum handles cross-origin cookie-based authentication
-- **Hot Reload**: Frontend changes reload instantly without Docker rebuild
-- **Access Point**: Use Traefik exclusively (http://mail.loc) for consistent backend access
+- **Frontend**: Vue/Vite assets served by Laravel at `http://mail.loc`
+- **Development**: Vite dev server at `localhost:5173` provides hot-reload (do not access directly)
+- **Authentication**: Sanctum handles same-domain cookie-based authentication
+- **Hot Reload**: Frontend changes reload instantly via Vite HMR
+- **Access**: Always use `http://mail.loc`, never `localhost:5173`
+
+**Important**: The Vite dev server at `localhost:5173` is for development hot-reload only. Always access the application at `http://mail.loc` to ensure proper session handling and authentication. Accessing via `localhost:5173` creates a different session domain and causes authentication issues.
 
 ### Building Images
 
@@ -139,13 +142,61 @@ CORS_ALLOWED_ORIGINS=https://your-production-domain.com
 - Check Traefik is running and `/etc/hosts` has the entry `127.0.0.1 mail.loc`
 - Verify Traefik network exists: `docker network ls | grep proxy`
 
+#### Error: "Unauthenticated" after successful Microsoft OAuth login
+
+**Symptoms**:
+- OAuth authentication completes successfully
+- User is redirected to dashboard
+- API calls return `{"message":"Unauthenticated."}`
+- Browser console shows 401 errors on `/api/user` endpoint
+
+**Root Cause 1: Accessing via wrong URL**
+You're accessing the application at `http://localhost:5173` instead of `http://mail.loc`. This creates different sessions with different cookie domains.
+
+**Solution**:
+1. Always access the application at `http://mail.loc`
+2. Close all browser tabs at `localhost:5173`
+3. Clear browser cookies
+4. Access `http://mail.loc` and try again
+
+**Root Cause 2: Secure cookie over HTTP**
+The session cookie is marked with the `Secure` flag (`SESSION_SECURE_COOKIE=true`), which prevents browsers from sending it over HTTP connections.
+
+**Solution**:
+1. Update your `.env` file:
+   ```env
+   SESSION_SECURE_COOKIE=false
+   ```
+
+2. Restart the application:
+   ```bash
+   docker-compose restart app
+   ```
+
+3. Clear browser cookies and cache (or use incognito mode)
+
+4. Access `http://mail.loc` and try the OAuth flow again
+
+**Verification**:
+- Open browser DevTools → Application → Cookies
+- After login, verify the session cookie exists for domain `mail.loc`
+- Verify it does NOT have the `Secure` flag
+- Make an API request and verify the cookie is sent in the request headers
+
+**Why this happens**:
+Browsers enforce strict security policies: cookies marked `Secure` are only transmitted over HTTPS. The application runs at `http://mail.loc` (HTTP) during local development. Even though OAuth happens over HTTPS (ngrok), the actual application access is HTTP, so secure cookies are blocked.
+
+**Production note**: In production with full HTTPS, set `SESSION_SECURE_COOKIE=true` for security.
+
 **"CORS errors in browser console":**
-- Verify `CORS_ALLOWED_ORIGINS=http://localhost:5173` in .env
+- Verify `CORS_ALLOWED_ORIGINS=http://localhost:5173,http://mail.loc` in .env
+- Note: CORS is primarily for the Vite dev server; the app should be accessed at `http://mail.loc`
 - Check config/cors.php configuration
 - Ensure Docker containers are restarted after .env changes: `docker-compose restart app`
 
 **"CSRF token mismatch":**
-- Check `SANCTUM_STATEFUL_DOMAINS` includes `localhost:5173`
+- Check `SANCTUM_STATEFUL_DOMAINS` includes `mail.loc` (primary) and `localhost:5173` (for Vite dev server)
+- Always access the app at `http://mail.loc` for proper session handling
 - Verify session configuration in config/session.php
 
 **"Authentication not working":**

@@ -136,8 +136,8 @@ SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1,aery.eu.ngr
 # CORS origins - ADD NGROK HTTPS URL
 CORS_ALLOWED_ORIGINS=http://localhost:5173,https://aery.eu.ngrok.io
 
-# Session - ENABLE SECURE COOKIES FOR HTTPS
-SESSION_SECURE_COOKIE=true
+# Session - CRITICAL: Must be false for HTTP development
+SESSION_SECURE_COOKIE=false
 SESSION_SAME_SITE=none
 SESSION_DOMAIN=null
 
@@ -148,6 +148,43 @@ OFFICE365_CLIENT_SECRET=your-client-secret-from-azure
 OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback
 OFFICE365_SCOPES="openid,profile,email,offline_access,User.Read,Mail.Read"
 ```
+
+### Critical Configuration Notes
+
+#### Always Access at http://mail.loc
+
+**Important**: Always access the application at `http://mail.loc`, NOT `http://localhost:5173`.
+
+- `http://mail.loc` - Laravel serves the application (backend + frontend)
+- `http://localhost:5173` - Vite dev server for hot-reload (development only, not for user access)
+
+The Vite dev server provides hot-reload functionality, but the actual application should be accessed through Laravel at `http://mail.loc`. This ensures:
+- Single session domain (no cookie conflicts)
+- Consistent authentication state
+- Proper routing and middleware execution
+- Correct asset serving in development
+
+#### Understanding SESSION_SECURE_COOKIE=false
+
+**Why false even with HTTPS ngrok?**
+
+This is the most common point of confusion. Here's the complete flow:
+
+1. **OAuth callback** happens over HTTPS via ngrok ✓
+2. **Session is created** and stored in the database ✓
+3. **User is redirected** to `http://mail.loc/#/dashboard` (HTTP) ✓
+4. **All subsequent requests** happen at `http://mail.loc` (HTTP)
+5. **Browser checks cookie security**: If `SESSION_SECURE_COOKIE=true`, the cookie has the `Secure` flag
+6. **Browser refuses to send** cookies marked `Secure` over HTTP connections
+7. **Result**: Backend receives requests without session cookie → "Unauthenticated"
+
+**The solution**: Set `SESSION_SECURE_COOKIE=false` so the session cookie can be transmitted over HTTP at `mail.loc`.
+
+**Security note**: This is safe for local development because:
+- The application runs locally (mail.loc resolves to 127.0.0.1)
+- No sensitive data is transmitted over the internet without encryption
+- OAuth tokens are still exchanged over HTTPS (ngrok)
+- In production, you would set this to `true` when the entire stack is HTTPS
 
 **Why APP_URL must be the ngrok HTTPS URL:**
 - Laravel uses `APP_URL` to determine if the application is running over HTTPS
@@ -197,7 +234,10 @@ docker-compose exec app php artisan cache:clear
 
 ## Step 7: Test the OAuth Flow
 
-1. **Open the application:** Navigate to http://localhost:5173 in your browser
+1. **Open the application:** Navigate to http://mail.loc in your browser
+   - **Important**: Use `http://mail.loc`, NOT `http://localhost:5173`
+   - The Vite dev server at localhost:5173 is for hot-reload only
+   - Accessing via localhost:5173 creates a different session and causes authentication issues
 
 2. **Click "Sign in with Microsoft":** This should redirect you to Microsoft's login page
 
@@ -213,7 +253,10 @@ docker-compose exec app php artisan cache:clear
 
 8. **Application processes:** Laravel exchanges the code for tokens and logs you in
 
-9. **Final redirect:** You should be redirected to the dashboard at http://localhost:5173/#/dashboard
+9. **Final redirect:** You should be redirected to the dashboard at http://mail.loc/#/dashboard
+   - Verify you're at `http://mail.loc`, not `localhost:5173`
+   - Check browser DevTools → Application → Cookies
+   - Verify session cookie exists and does NOT have the `Secure` flag
 
 ## Step 8: Verify Connection
 
@@ -222,6 +265,41 @@ docker-compose exec app php artisan cache:clear
 - Token expiration date should be shown
 
 ## Troubleshooting
+
+#### Error: "Unauthenticated" after successful OAuth login
+
+**Symptoms**:
+- OAuth flow completes successfully
+- Logs show "User authenticated successfully" and "Session established on local domain"
+- User is redirected to dashboard
+- Frontend shows "Unauthenticated" error when calling `/api/user`
+- Browser DevTools shows session cookie is not being sent with API requests
+
+**Cause 1: Wrong access URL**
+You're accessing the app at `http://localhost:5173` instead of `http://mail.loc`. This creates different sessions and cookie domains.
+
+**Solution**:
+1. Always access the application at `http://mail.loc`
+2. Close all browser tabs at `localhost:5173`
+3. Clear browser cookies
+4. Access `http://mail.loc` and try OAuth again
+
+**Cause 2: SESSION_SECURE_COOKIE=true**
+The session cookie is marked with the `Secure` flag, which prevents browsers from sending it over HTTP connections.
+
+**Solution**:
+1. Set `SESSION_SECURE_COOKIE=false` in `.env`
+2. Restart the application: `docker-compose restart app`
+3. Clear browser cookies and cache
+4. Access `http://mail.loc` and try OAuth again
+
+**Verification**:
+1. Open browser DevTools → Application/Storage → Cookies
+2. After successful login, check the session cookie (usually named `laravel-session`)
+3. Verify the cookie domain is `mail.loc` (or empty for current domain)
+4. Verify it does NOT have the `Secure` flag
+5. Verify it has `SameSite=None` flag
+6. Make an API request and verify the cookie is sent in the request headers
 
 ### Issue: "Redirect URI mismatch" error from Microsoft
 
@@ -322,7 +400,8 @@ Then start with: `ngrok start mail`
 ┌──────────┐
 │  User    │
 └────┬─────┘
-     │ 1. Visit http://localhost:5173
+     │ 1. Visit http://mail.loc
+     │    (NOT localhost:5173)
      ▼
 ┌──────────────────────┐
 │  Frontend (Vite)     │
@@ -365,7 +444,7 @@ Then start with: `ngrok start mail`
 │  - Login user                                │
 └──────┬───────────────────────────────────────┘
        │ 6. Redirect to dashboard
-       │    http://localhost:5173/#/dashboard
+       │    http://mail.loc/#/dashboard
        ▼
 ┌──────────────────────┐
 │  Frontend (Vite)     │

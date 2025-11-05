@@ -251,6 +251,111 @@ mail-app-1       Up
 
 ---
 
+## Session Cookie Authentication Fix (2025-10-28)
+
+### Issue: "Unauthenticated" after successful OAuth login
+
+**Problem**:
+After successfully completing Microsoft OAuth authentication, users were redirected to the dashboard but received `{"message":"Unauthenticated."}` errors when the frontend called `/api/user`. The logs showed:
+- OAuth redirect initiated ✓
+- State validation successful ✓
+- User authenticated successfully ✓
+- Session established on local domain ✓
+- But API calls returned 401 Unauthenticated ✗
+
+**Root Cause**:
+The `.env.example` had `SESSION_SECURE_COOKIE=true`, which marks session cookies with the `Secure` flag. Browsers only send cookies marked `Secure` over HTTPS connections. The application flow:
+
+1. OAuth callback happens over HTTPS (ngrok) → session created ✓
+2. User redirected to `http://mail.loc/#/dashboard` (HTTP) → session cookie set with `Secure` flag ✓
+3. Frontend makes API call to `/api/user` at `http://mail.loc` (HTTP)
+4. Browser checks cookie: has `Secure` flag, connection is HTTP
+5. Browser refuses to send the cookie
+6. Backend receives request without session cookie → "Unauthenticated"
+
+**Additional Confusion**:
+The documentation incorrectly suggested accessing the application at `http://localhost:5173` (Vite dev server). This created additional session inconsistencies:
+- Accessing via `localhost:5173` creates a session with domain `localhost`
+- Accessing via `mail.loc` creates a session with domain `mail.loc`
+- These are different sessions with different cookies
+- Users were being redirected between the two, losing authentication state
+
+**Correct Architecture**:
+- **Application access**: Always `http://mail.loc` (Laravel serves both backend and frontend)
+- **Vite dev server**: `http://localhost:5173` (for hot-reload only, not for user access)
+- **OAuth callback**: `https://aery.eu.ngrok.io/auth/microsoft/callback` (HTTPS via ngrok)
+
+**Solution**:
+
+1. **Changed `SESSION_SECURE_COOKIE` to `false`** in `.env.example`:
+   - Allows session cookies to be transmitted over HTTP
+   - Required because the application runs at `http://mail.loc` (HTTP)
+   - Safe for local development (traffic is local only)
+   - OAuth tokens still exchanged over HTTPS (ngrok)
+
+2. **Updated documentation** to clarify correct access URL:
+   - Always access at `http://mail.loc`, never `localhost:5173`
+   - Vite dev server is for hot-reload only
+   - Single domain = single session = no cookie conflicts
+
+3. **No code changes needed**:
+   - `MicrosoftAuthController` already redirects to `http://mail.loc/#/dashboard` (correct)
+   - No need for `FRONTEND_URL` variable (frontend served by Laravel at same domain)
+   - Existing session handling logic is correct
+
+**Files Modified**:
+- `.env.example` - Changed `SESSION_SECURE_COOKIE=true` to `false`, updated comments
+- `NGROK_SETUP.md` - Clarified correct access URL and session cookie configuration
+- `README.md` - Updated to emphasize `http://mail.loc` as the only access URL
+- `RUNTIME_FIXES.md` - This documentation
+
+**Testing**:
+1. Set environment variables:
+   ```env
+   APP_URL=https://aery.eu.ngrok.io
+   SESSION_SECURE_COOKIE=false
+   SESSION_SAME_SITE=none
+   SESSION_DOMAIN=null
+   ```
+
+2. Restart application: `docker-compose restart app`
+
+3. Clear browser cookies
+
+4. Start ngrok: `ngrok http --domain=aery.eu.ngrok.io --host-header=rewrite mail.loc:80`
+
+5. Start Vite dev server: `pnpm dev` (for hot-reload, not for access)
+
+6. Test OAuth flow:
+   - Visit `http://mail.loc` (NOT localhost:5173)
+   - Click "Sign in with Microsoft"
+   - Complete OAuth authentication
+   - Verify redirect to `http://mail.loc/#/dashboard`
+   - Verify dashboard loads user data (no "Unauthenticated" error)
+   - Check browser DevTools → Cookies: session cookie should NOT have `Secure` flag
+   - Verify cookie domain is `mail.loc` or empty (current domain)
+
+7. Verify API calls:
+   - Open browser DevTools → Network tab
+   - Observe `/api/user` request
+   - Verify session cookie is sent in request headers
+   - Verify response is 200 OK with user data
+
+**Production Considerations**:
+In production with full HTTPS:
+- Set `SESSION_SECURE_COOKIE=true`
+- Set `APP_URL` to production HTTPS URL
+- Ensure entire stack uses HTTPS
+- No need for ngrok or separate Vite dev server
+
+**Key Takeaway**:
+The issue was not about cross-domain authentication (localhost:5173 ↔ mail.loc), but about HTTP vs HTTPS cookie security. The application should always be accessed at a single domain (`http://mail.loc`) during local development, with `SESSION_SECURE_COOKIE=false` to allow HTTP cookie transmission.
+
+**References**:
+- MDN: Set-Cookie Secure flag: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie#secure
+- Laravel Sanctum SPA Authentication: https://laravel.com/docs/sanctum#spa-authentication
+- SameSite cookie attribute: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite
+
 ## Microsoft OAuth Fixes (2025-10-27)
 
 ### Issue 1: Class "Microsoft\Graph\Graph" not found
