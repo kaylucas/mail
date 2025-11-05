@@ -3,6 +3,7 @@ import axios from '../axios'
 import Login from '../pages/Login.vue'
 import Dashboard from '../pages/Dashboard.vue'
 import AuthCallback from '../pages/AuthCallback.vue'
+import EmailsPage from '../pages/EmailsPage.vue'
 
 const routes = [
   {
@@ -21,6 +22,12 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: Dashboard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/emails',
+    name: 'Emails',
+    component: EmailsPage,
     meta: { requiresAuth: true }
   }
 ]
