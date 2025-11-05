@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MicrosoftAuthController;
 use App\Http\Controllers\Office365ConnectionController;
+use App\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -28,5 +29,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/connections', [Office365ConnectionController::class, 'destroy']);
         // @deprecated - OAuth callback is now handled via web route /auth/microsoft/callback
         Route::get('/auth/url', [Office365ConnectionController::class, 'getAuthUrl']);
+    });
+
+    // Subscription Management Routes
+    Route::prefix('subscriptions')->group(function () {
+        Route::post('/', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+        Route::get('/current', [SubscriptionController::class, 'show'])->name('subscriptions.show');
+        Route::post('/renew', [SubscriptionController::class, 'renew'])->name('subscriptions.renew');
+        Route::delete('/', [SubscriptionController::class, 'destroy'])->name('subscriptions.destroy');
     });
 });

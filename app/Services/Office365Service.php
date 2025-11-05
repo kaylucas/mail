@@ -416,6 +416,23 @@ class Office365Service
             $response = Http::withToken($connection->access_token)
                 ->post('https://graph.microsoft.com/v1.0/subscriptions', $requestBody);
 
+            // Handle 401 by refreshing token and retrying once
+            if ($response->status() === 401) {
+                Log::info('Received 401 response, refreshing token and retrying', [
+                    'connection_id' => $connection->id,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+
+                // Retry request with new token
+                $response = Http::withToken($connection->access_token)
+                    ->post('https://graph.microsoft.com/v1.0/subscriptions', $requestBody);
+            }
+
             Log::info('Microsoft Graph subscription response', [
                 'status' => $response->status(),
                 'subscription_id' => $response->json('id'),
@@ -484,6 +501,24 @@ class Office365Service
             $response = Http::withToken($connection->access_token)
                 ->patch("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}", $requestBody);
 
+            // Handle 401 by refreshing token and retrying once
+            if ($response->status() === 401) {
+                Log::info('Received 401 response, refreshing token and retrying', [
+                    'connection_id' => $connection->id,
+                    'subscription_id' => $subscriptionId,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+
+                // Retry request with new token
+                $response = Http::withToken($connection->access_token)
+                    ->patch("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}", $requestBody);
+            }
+
             Log::info('Microsoft Graph subscription renewal response', [
                 'status' => $response->status(),
                 'subscription_id' => $subscriptionId,
@@ -541,6 +576,24 @@ class Office365Service
             // Make DELETE request to Microsoft Graph API
             $response = Http::withToken($connection->access_token)
                 ->delete("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}");
+
+            // Handle 401 by refreshing token and retrying once
+            if ($response->status() === 401) {
+                Log::info('Received 401 response, refreshing token and retrying', [
+                    'connection_id' => $connection->id,
+                    'subscription_id' => $subscriptionId,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+
+                // Retry request with new token
+                $response = Http::withToken($connection->access_token)
+                    ->delete("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}");
+            }
 
             if ($response->status() === 204) {
                 Log::info('Successfully deleted Microsoft Graph subscription', [
@@ -606,6 +659,24 @@ class Office365Service
             $response = Http::withToken($connection->access_token)
                 ->get("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}");
 
+            // Handle 401 by refreshing token and retrying once
+            if ($response->status() === 401) {
+                Log::info('Received 401 response, refreshing token and retrying', [
+                    'connection_id' => $connection->id,
+                    'subscription_id' => $subscriptionId,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+
+                // Retry request with new token
+                $response = Http::withToken($connection->access_token)
+                    ->get("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}");
+            }
+
             Log::info('Microsoft Graph subscription fetch response', [
                 'status' => $response->status(),
                 'subscription_id' => $subscriptionId,
@@ -620,7 +691,8 @@ class Office365Service
                 ]);
 
                 throw new Exception(
-                    'Failed to fetch Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+                    'Failed to fetch Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error'),
+                    $response->status()
                 );
             }
 
