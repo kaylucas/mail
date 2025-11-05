@@ -4,11 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WebhookNotification extends Model
 {
-    use HasFactory;
+    use HasFactory, MassPrunable;
 
     /**
      * The attributes that are mass assignable.
@@ -47,6 +48,14 @@ class WebhookNotification extends Model
     public function graphSubscription(): BelongsTo
     {
         return $this->belongsTo(GraphSubscription::class, 'subscription_id', 'subscription_id');
+    }
+
+    /**
+     * Alias for graphSubscription relationship.
+     */
+    public function subscription(): BelongsTo
+    {
+        return $this->graphSubscription();
     }
 
     /**
@@ -146,5 +155,16 @@ class WebhookNotification extends Model
     public function isFailed(): bool
     {
         return $this->processing_attempts >= 3 && !$this->isProcessed();
+    }
+
+    /**
+     * Get the prunable model query.
+     *
+     * Prune processed notifications older than 30 days.
+     */
+    public function prunable()
+    {
+        return static::whereNotNull('processed_at')
+            ->where('created_at', '<=', now()->subDays(30));
     }
 }

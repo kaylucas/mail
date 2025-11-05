@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\EmailController;
 use App\Http\Controllers\EmailSyncController;
 use App\Http\Controllers\MicrosoftAuthController;
 use App\Http\Controllers\Office365ConnectionController;
@@ -44,5 +45,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('emails/sync')->group(function () {
         Route::post('/initial', [EmailSyncController::class, 'initialSync'])->name('emails.sync.initial');
         Route::get('/status/{jobId}', [EmailSyncController::class, 'status'])->name('emails.sync.status');
+    });
+
+    // Email Management Routes
+    Route::prefix('emails')->group(function () {
+        Route::get('/', [EmailController::class, 'index'])->name('emails.index');
+        Route::get('/stats', [EmailController::class, 'stats'])->name('emails.stats');
+        Route::get('/folders', [EmailController::class, 'folders'])->name('emails.folders');
+        Route::get('/{id}', [EmailController::class, 'show'])->name('emails.show');
+        Route::patch('/{id}/read', [EmailController::class, 'updateReadStatus'])->name('emails.updateReadStatus');
     });
 });

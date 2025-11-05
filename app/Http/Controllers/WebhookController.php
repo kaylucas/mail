@@ -190,7 +190,7 @@ class WebhookController extends Controller
                     ]);
 
                     // Store notification for asynchronous processing
-                    WebhookNotification::create([
+                    $webhookNotification = WebhookNotification::create([
                         'subscription_id' => $subscriptionId,
                         'client_state' => $clientState,
                         'change_type' => $changeType,
@@ -202,10 +202,17 @@ class WebhookController extends Controller
                     Log::info('Notification stored successfully', [
                         'subscription_id' => $subscriptionId,
                         'change_type' => $changeType,
+                        'notification_id' => $webhookNotification->id,
                     ]);
 
-                    // TODO: Dispatch job for asynchronous processing (future phase)
-                    // dispatch(new ProcessWebhookNotificationJob($notification));
+                    // Dispatch job for asynchronous processing
+                    \App\Jobs\ProcessWebhookNotificationJob::dispatch($webhookNotification);
+
+                    Log::info('ProcessWebhookNotificationJob dispatched', [
+                        'notification_id' => $webhookNotification->id,
+                        'subscription_id' => $subscriptionId,
+                        'change_type' => $changeType,
+                    ]);
 
                     $processedCount++;
 

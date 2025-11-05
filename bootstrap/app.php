@@ -18,6 +18,24 @@ return Application::configure(basePath: dirname(__DIR__))
         // This allows Laravel to properly handle X-Forwarded-* headers
         $middleware->trustProxies(at: '*');
     })
+    ->withSchedule(function ($schedule): void {
+        // Run delta sync every 30 minutes for all users with active connections
+        $schedule->command('email:delta-sync --all')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        // Renew subscriptions expiring within 12 hours, run every hour
+        $schedule->command('subscriptions:renew --hours=12')
+            ->hourly()
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        // Clean up old processed webhook notifications (older than 30 days)
+        $schedule->command('model:prune', ['--model' => 'App\\Models\\WebhookNotification'])
+            ->daily()
+            ->at('02:00');
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();
