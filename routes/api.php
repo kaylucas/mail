@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\EmailSyncController;
 use App\Http\Controllers\MicrosoftAuthController;
 use App\Http\Controllers\Office365ConnectionController;
 use App\Http\Controllers\SubscriptionController;
@@ -37,5 +38,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/current', [SubscriptionController::class, 'show'])->name('subscriptions.show');
         Route::post('/renew', [SubscriptionController::class, 'renew'])->name('subscriptions.renew');
         Route::delete('/', [SubscriptionController::class, 'destroy'])->name('subscriptions.destroy');
+    });
+
+    // Email Sync Routes
+    Route::prefix('emails/sync')->group(function () {
+        Route::post('/initial', [EmailSyncController::class, 'initialSync'])->name('emails.sync.initial');
+        Route::get('/status/{jobId}', [EmailSyncController::class, 'status'])->name('emails.sync.status');
     });
 });
