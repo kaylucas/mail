@@ -80,7 +80,8 @@ class MicrosoftAuthController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect('/#/?error=auth_redirect_failed');
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+            return redirect("{$frontendUrl}/#/?error=auth_redirect_failed");
         }
     }
 
@@ -234,14 +235,16 @@ class MicrosoftAuthController extends Controller
             // Redirect to local backend to establish session, then to frontend
             // This is necessary because the OAuth callback happens on ngrok (HTTPS) but
             // the app runs on mail.loc (HTTP). We need to establish the session on the correct domain.
-            return redirect("http://mail.loc/auth/session?token={$sessionToken}&redirect=" . urlencode('http://mail.loc/#/dashboard'));
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+            return redirect("http://mail.loc/auth/session?token={$sessionToken}&redirect=" . urlencode("{$frontendUrl}/#/dashboard"));
         } catch (Exception $e) {
             Log::error('Microsoft auth callback failed', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return redirect('/#/?error=auth_failed');
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+            return redirect("{$frontendUrl}/#/?error=auth_failed");
         }
     }
 
@@ -255,7 +258,8 @@ class MicrosoftAuthController extends Controller
     {
         try {
             $token = $request->query('token');
-            $redirect = $request->query('redirect', 'http://mail.loc/#/dashboard');
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+            $redirect = $request->query('redirect', "{$frontendUrl}/#/dashboard");
 
             if (!$token) {
                 throw new Exception('Missing session token');
@@ -294,7 +298,8 @@ class MicrosoftAuthController extends Controller
                 'message' => $e->getMessage(),
             ]);
 
-            return redirect('http://mail.loc/#/?error=session_failed');
+            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+            return redirect("{$frontendUrl}/#/?error=session_failed");
         }
     }
 

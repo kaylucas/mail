@@ -9,7 +9,7 @@
 
 ## Development Setup
 
-This application uses a hybrid development approach: Laravel backend runs in Docker (via Traefik), while the Vue/Vite frontend runs locally on the host machine for faster iteration.
+This application uses a **separated frontend/backend architecture**: The Laravel backend runs in Docker (via Traefik) at `http://mail.loc`, while the Vue 3 SPA frontend runs independently at `http://localhost:5173` and communicates with the backend via API.
 
 ### Prerequisites
 
@@ -26,7 +26,8 @@ cp .env.example .env
 ```
 
 2. **Update .env:**
-   - Set `APP_URL=http://mail.loc`
+   - Set `APP_URL=http://mail.loc` (backend URL)
+   - Set `FRONTEND_URL=http://localhost:5173` (frontend URL)
    - Configure Office365 credentials (OFFICE365_CLIENT_ID, OFFICE365_CLIENT_SECRET)
    - Verify `SANCTUM_STATEFUL_DOMAINS=localhost:5173,mail.loc,localhost,127.0.0.1`
    - Verify `CORS_ALLOWED_ORIGINS=http://localhost:5173`
@@ -43,29 +44,35 @@ docker-compose exec app php artisan migrate
 
 5. **Install frontend dependencies:**
 ```bash
+cd frontend
 pnpm install
 ```
 
-6. **Start Vite dev server:**
+6. **Start frontend dev server:**
 ```bash
-pnpm run dev
+cd frontend
+pnpm dev
 ```
 
 7. **Access the application:**
-   - **Application**: http://mail.loc (ALWAYS use this URL)
-   - **Vite dev server**: http://localhost:5173 (for hot-reload only, do NOT access directly)
-   - **Backend API**: http://mail.loc/api (same domain as frontend)
+   - **Frontend**: http://localhost:5173 (Vue SPA - use this URL)
+   - **Backend API**: http://mail.loc (Laravel API)
+   - API requests from frontend are proxied to backend automatically
 
 ### How It Works
 
-- **Backend**: Laravel runs in Docker, accessible at `http://mail.loc` via Traefik reverse proxy
-- **Frontend**: Vue/Vite assets served by Laravel at `http://mail.loc`
-- **Development**: Vite dev server at `localhost:5173` provides hot-reload (do not access directly)
-- **Authentication**: Sanctum handles same-domain cookie-based authentication
+- **Backend**: Laravel runs in Docker at `http://mail.loc` via Traefik reverse proxy (API only)
+- **Frontend**: Vue 3 SPA runs independently at `http://localhost:5173` via Vite dev server
+- **Communication**: Frontend makes cross-origin API requests to backend with credentials
+- **Authentication**: Sanctum handles session-based authentication with CORS support
 - **Hot Reload**: Frontend changes reload instantly via Vite HMR
-- **Access**: Always use `http://mail.loc`, never `localhost:5173`
+- **Separation**: Frontend and backend are completely decoupled
 
-**Important**: The Vite dev server at `localhost:5173` is for development hot-reload only. Always access the application at `http://mail.loc` to ensure proper session handling and authentication. Accessing via `localhost:5173` creates a different session domain and causes authentication issues.
+**Architecture Benefits**:
+- Frontend runs without Docker/ngrok complications
+- Faster development with true hot-reload
+- Easy to deploy frontend separately (static hosting)
+- Backend can focus on being a pure API
 
 ### Building Images
 
@@ -108,20 +115,26 @@ echo "127.0.0.1 mail.loc" | sudo tee -a /etc/hosts
 
 ### Development Workflow
 
-- **Frontend changes**: Edit files in `resources/js/` and `resources/css/` - Vite hot-reloads automatically
+- **Frontend changes**: Edit files in `frontend/src/` - Vite hot-reloads automatically
 - **Backend changes**: Edit PHP files - changes reflect immediately (no rebuild needed)
 - **Database changes**: Run migrations with `docker-compose exec app php artisan migrate`
 - **Clear cache**: `docker-compose exec app php artisan cache:clear`
 - **View logs**: `docker-compose logs -f app`
 
+**Two Terminal Workflow:**
+- Terminal 1: `docker-compose up` (backend)
+- Terminal 2: `cd frontend && pnpm dev` (frontend)
+
 ### Production Build
 
 1. **Build frontend assets:**
 ```bash
-pnpm run build
+cd frontend
+pnpm build
 ```
+This outputs to `frontend/dist/` which can be deployed to any static hosting service (Vercel, Netlify, S3, etc.)
 
-2. **Rebuild Docker image:**
+2. **Rebuild Docker image (backend):**
 ```bash
 docker-compose build app
 ```

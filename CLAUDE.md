@@ -4,34 +4,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Laravel 12 application with a Vue 3 SPA frontend that implements Microsoft Office 365 OAuth authentication and email integration. The application uses Laravel Sanctum for stateful SPA authentication with session-based CSRF protection.
+This is a Laravel 12 application with a **separated Vue 3 SPA frontend** that implements Microsoft Office 365 OAuth authentication and email integration. The frontend runs independently from the Laravel backend and communicates via API. The application uses Laravel Sanctum for stateful SPA authentication with session-based CSRF protection.
 
-**Development Domain:** The application is developed and tested exclusively at `http://mail.loc` via Docker + Traefik. All redirects, documentation, and configuration should reference `mail.loc` as the primary development domain.
+**Architecture:**
+- **Backend**: Laravel 12 API at `http://mail.loc` (Docker + Traefik)
+- **Frontend**: Vue 3 SPA at `http://localhost:5173` (standalone Vite dev server)
+- **Frontend Location**: `/frontend` directory (separate from Laravel)
+
+**Development Domain:** The backend is developed and tested at `http://mail.loc` via Docker + Traefik. The frontend runs on `http://localhost:5173` and proxies API requests to the backend.
 
 ## Development Commands
 
 ### Initial Setup
+
+**Backend:**
 ```bash
-composer setup  # Installs dependencies, generates app key, runs migrations, builds frontend
+composer install           # Install Laravel dependencies
+php artisan key:generate   # Generate application key
+php artisan migrate        # Run database migrations
 ```
 
-### Running the Development Server
+**Frontend:**
 ```bash
-composer dev  # Runs server, queue, logs (pail), and Vite concurrently on localhost:8000
+cd frontend
+pnpm install              # Install frontend dependencies
 ```
 
-Or run services individually:
+### Running the Development Servers
+
+**Backend (Laravel API):**
 ```bash
-php artisan serve              # Start Laravel server on localhost:8000
+# Option 1: Use Docker (recommended)
+# The backend runs at http://mail.loc via Traefik
+docker-compose up
+
+# Option 2: Run services individually
+php artisan serve              # Start Laravel server
 php artisan queue:listen       # Process queue jobs
 php artisan pail               # Tail application logs
-npm run dev                    # Start Vite dev server (use pnpm if available)
 ```
 
-### Building Frontend
+**Frontend (Vue SPA):**
 ```bash
-npm run build   # Production build
-npm run dev     # Development mode with hot reload
+cd frontend
+pnpm dev                       # Start Vite dev server at localhost:5173
+```
+
+Access the application at `http://localhost:5173` (frontend proxies API requests to `http://mail.loc`)
+
+### Building Frontend for Production
+```bash
+cd frontend
+pnpm build                     # Production build → frontend/dist/
+pnpm preview                   # Preview production build
 ```
 
 ### Testing
@@ -57,30 +82,33 @@ php artisan migrate:rollback     # Rollback last migration
 ### Authentication Flow
 
 **Microsoft SSO Authentication (Primary):**
-1. User clicks "Sign in with Microsoft" at `http://mail.loc` → `/auth/microsoft` (web route)
+1. User clicks "Sign in with Microsoft" at `http://localhost:5173` → frontend redirects to backend `/auth/microsoft` (web route)
 2. `MicrosoftAuthController::redirect()` generates OAuth state, stores it in **cache**, redirects to Microsoft
 3. Microsoft redirects back to ngrok tunnel → `https://aery.eu.ngrok.io/auth/microsoft/callback` (web route)
 4. `MicrosoftAuthController::callback()` validates state from cache, exchanges code for tokens, creates/updates User and Office365Connection, logs user in
 5. **Session Transfer:** Callback creates temporary token in cache, redirects to `http://mail.loc/auth/session?token=xxx`
 6. `MicrosoftAuthController::establishSession()` validates token, logs in user on local domain, regenerates session
-7. Final redirect to `http://mail.loc/#/dashboard`
-8. Vue SPA uses Sanctum session cookies for authenticated API requests
+7. Final redirect to `http://localhost:5173/#/dashboard` (frontend)
+8. Vue SPA uses Sanctum session cookies for authenticated API requests (cross-origin with credentials)
 
 **Critical Security Details:**
 - OAuth state is stored in cache (10-minute TTL) with IP validation
 - State is single-use and deleted immediately after validation
 - Session transfer uses temporary tokens (5-minute TTL) to bridge ngrok → mail.loc
 - CSRF cookie must be initialized via `axios.get('/sanctum/csrf-cookie')` before any POST requests
-- `SANCTUM_STATEFUL_DOMAINS` must include `mail.loc` for local development
+- `SANCTUM_STATEFUL_DOMAINS` must include `localhost:5173` and `mail.loc` for local development
+- `CORS_ALLOWED_ORIGINS` must include `http://localhost:5173` for frontend access
 - Session is regenerated on the `mail.loc` domain after OAuth callback
+- All API requests are cross-origin (frontend on localhost:5173, backend on mail.loc)
 
 ### API Authentication
 
 The application uses **stateful Sanctum** (not token-based). Key configuration:
 - `bootstrap/app.php`: `$middleware->statefulApi()` enables session-based API auth
-- `axios.defaults.withCredentials = true` sends cookies with requests
-- `resources/js/app.js`: CSRF cookie initialized before Vue app mounts
+- `axios.defaults.withCredentials = true` sends cookies with requests (configured in `frontend/src/axios.js`)
+- `frontend/src/axios.js`: CSRF cookie initialized on app load
 - Protected routes use `auth:sanctum` middleware in `routes/api.php`
+- Cross-origin requests are enabled via CORS configuration (`config/cors.php`)
 
 ### Configuration
 
@@ -132,16 +160,26 @@ All methods use config values from `config/services.php`, with optional override
 
 ### Frontend Structure
 
+**Location:** `/frontend` directory (separated from Laravel backend)
+
 **Framework:** Vue 3 with Vue Router (hash mode), Tailwind CSS 4, Headless UI
-**Entry:** `resources/js/app.js` → mounts `App.vue` after CSRF cookie initialization
-**Router:** `resources/js/router/index.js`
+**Entry:** `frontend/src/main.js` → mounts `App.vue`
+**HTML Template:** `frontend/public/index.html`
+**Axios Config:** `frontend/src/axios.js` → configures API requests and CSRF cookie initialization
+**Router:** `frontend/src/router/index.js`
 - Navigation guards check authentication via `/api/user` endpoint
 - `meta: { requiresAuth: true }` for protected routes
 - `meta: { guest: true }` for public routes (auto-redirects if authenticated)
 
 **Pages:**
-- `Login.vue`: Microsoft SSO login button
-- `Dashboard.vue`: Main authenticated view
+- `frontend/src/pages/Login.vue`: Microsoft SSO login button
+- `frontend/src/pages/Dashboard.vue`: Main authenticated view
+
+**Key Files:**
+- `frontend/vite.config.js`: Vite configuration with proxy for backend API
+- `frontend/package.json`: Frontend dependencies (separate from Laravel)
+- `frontend/.env`: Frontend environment variables (VITE_API_URL)
+- `frontend/README.md`: Frontend-specific documentation
 
 ### Routes
 
@@ -149,7 +187,7 @@ All methods use config values from `config/services.php`, with optional override
 - `GET /auth/microsoft` → MicrosoftAuthController::redirect
 - `GET /auth/microsoft/callback` → MicrosoftAuthController::callback (receives callback from ngrok)
 - `GET /auth/session` → MicrosoftAuthController::establishSession (session transfer endpoint)
-- `GET /{any}` → Catch-all for Vue SPA
+- Note: Frontend runs separately, no catch-all route needed
 
 **API Routes (`routes/api.php`, protected by `auth:sanctum`):**
 - `POST /api/logout` → MicrosoftAuthController::logout
@@ -181,9 +219,10 @@ All methods use config values from `config/services.php`, with optional override
 ## Common Issues & Solutions
 
 ### 419 CSRF Token Mismatch
-- Ensure `axios.get('/sanctum/csrf-cookie')` runs before mounting Vue app
-- Check `SANCTUM_STATEFUL_DOMAINS` includes your domain/port
-- Verify `axios.defaults.withCredentials = true` is set
+- Ensure `axios.get('/sanctum/csrf-cookie')` runs on app load (configured in `frontend/src/axios.js`)
+- Check `SANCTUM_STATEFUL_DOMAINS` includes `localhost:5173` and `mail.loc`
+- Check `CORS_ALLOWED_ORIGINS` includes `http://localhost:5173`
+- Verify `axios.defaults.withCredentials = true` is set (in `frontend/src/axios.js`)
 
 ### OAuth State Validation Failed
 - State is stored in session, not cache - ensure sessions are working
@@ -197,4 +236,29 @@ All methods use config values from `config/services.php`, with optional override
 
 ## Package Manager
 
-This project uses **pnpm** (specified in `package.json` packageManager field). Use `pnpm install` and `pnpm run dev` instead of npm where possible.
+This project uses **pnpm** for both backend and frontend (specified in `package.json` and `frontend/package.json`). Use `pnpm install` and `pnpm run dev` instead of npm where possible.
+
+## Project Structure
+
+```
+/
+├── app/                    # Laravel application code
+├── config/                 # Laravel configuration
+├── database/               # Migrations, seeders, factories
+├── frontend/               # 🆕 Separated Vue 3 SPA frontend
+│   ├── public/            # Static assets
+│   ├── src/               # Vue source code
+│   │   ├── pages/        # Page components
+│   │   ├── router/       # Vue Router config
+│   │   ├── App.vue       # Root component
+│   │   ├── axios.js      # Axios config
+│   │   ├── main.js       # Entry point
+│   │   └── styles.css    # Global styles
+│   ├── package.json       # Frontend dependencies
+│   ├── vite.config.js     # Vite config
+│   └── README.md          # Frontend docs
+├── resources/              # Laravel resources (views, original js removed)
+├── routes/                 # Laravel routes (API and auth endpoints)
+├── tests/                  # Laravel tests
+└── composer.json           # Backend dependencies
+```
