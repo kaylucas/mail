@@ -43,4 +43,32 @@ return [
         'scopes' => env('OFFICE365_SCOPES', 'offline_access,Mail.Read'),
     ],
 
+    'microsoft_graph' => [
+        // Webhook base URL - must be publicly accessible HTTPS endpoint
+        // Development: ngrok tunnel URL (e.g., https://aery.eu.ngrok.io)
+        // Production: Your application's public domain
+        'webhook_base_url' => env('WEBHOOK_BASE_URL', env('APP_URL')),
+
+        // Secret key for generating clientState values
+        // Used to validate webhook notifications are from Microsoft
+        // Generate with: php artisan tinker -> Str::random(32)
+        'webhook_secret' => env('WEBHOOK_SECRET_KEY'),
+
+        // Subscription expiration time in minutes
+        // Maximum for mail resources: 10,080 minutes (7 days)
+        // Minimum: 45 minutes (auto-bumped by Microsoft if lower)
+        // Default: 7 days (10,080 minutes) - renew earlier operationally
+        'subscription_expiration_minutes' => env('GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES', 10080),
+
+        // Renewal threshold in hours
+        // Renew subscriptions when they expire within this threshold
+        // Recommended: 12 hours to ensure subscriptions never expire
+        'subscription_renewal_threshold_hours' => env('GRAPH_SUBSCRIPTION_RENEWAL_THRESHOLD_HOURS', 12),
+
+        // Notification URL paths (relative to webhook_base_url)
+        // notification_url_path handles both GET (validation) and POST (notifications)
+        'notification_url_path' => '/webhooks/microsoft/notifications',
+        'lifecycle_url_path' => '/webhooks/microsoft/lifecycle',
+    ],
+
 ];

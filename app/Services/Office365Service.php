@@ -367,4 +367,273 @@ class Office365Service
         }
     }
 
+    /**
+     * Create a new Microsoft Graph subscription.
+     */
+    public function createGraphSubscription(Office365Connection $connection, array $params): array
+    {
+        try {
+            // Check if token is expired and refresh if needed
+            if ($connection->isTokenExpired()) {
+                Log::info('Access token expired, refreshing before creating subscription', [
+                    'connection_id' => $connection->id,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+            }
+
+            // Normalize changeType to comma-separated string if array
+            $changeType = is_array($params['changeType'])
+                ? implode(',', $params['changeType'])
+                : $params['changeType'];
+
+            // Convert expirationDateTime to ISO8601 format if Carbon instance
+            $expirationDateTime = $params['expirationDateTime'] instanceof \Carbon\Carbon
+                ? $params['expirationDateTime']->toIso8601String()
+                : $params['expirationDateTime'];
+
+            // Build request body
+            $requestBody = [
+                'changeType' => $changeType,
+                'notificationUrl' => $params['notificationUrl'],
+                'resource' => $params['resource'],
+                'expirationDateTime' => $expirationDateTime,
+                'clientState' => $params['clientState'],
+            ];
+
+            Log::info('Creating Microsoft Graph subscription', [
+                'resource' => $params['resource'],
+                'changeType' => $changeType,
+                'notificationUrl' => $params['notificationUrl'],
+                'expirationDateTime' => $expirationDateTime,
+            ]);
+
+            // Make POST request to Microsoft Graph API
+            $response = Http::withToken($connection->access_token)
+                ->post('https://graph.microsoft.com/v1.0/subscriptions', $requestBody);
+
+            Log::info('Microsoft Graph subscription response', [
+                'status' => $response->status(),
+                'subscription_id' => $response->json('id'),
+            ]);
+
+            if ($response->failed()) {
+                $errorData = $response->json();
+                Log::error('Failed to create Microsoft Graph subscription', [
+                    'status' => $response->status(),
+                    'error' => $errorData,
+                    'resource' => $params['resource'],
+                ]);
+
+                throw new Exception(
+                    'Failed to create Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+                );
+            }
+
+            return $response->json();
+        } catch (Exception $e) {
+            Log::error('Exception while creating Microsoft Graph subscription', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Renew an existing Microsoft Graph subscription.
+     */
+    public function renewGraphSubscription(Office365Connection $connection, string $subscriptionId, string $expirationDateTime): array
+    {
+        try {
+            // Check if token is expired and refresh if needed
+            if ($connection->isTokenExpired()) {
+                Log::info('Access token expired, refreshing before renewing subscription', [
+                    'connection_id' => $connection->id,
+                    'subscription_id' => $subscriptionId,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+            }
+
+            // Convert expirationDateTime to ISO8601 format if Carbon instance
+            $expirationDateTime = $expirationDateTime instanceof \Carbon\Carbon
+                ? $expirationDateTime->toIso8601String()
+                : $expirationDateTime;
+
+            // Build request body
+            $requestBody = [
+                'expirationDateTime' => $expirationDateTime,
+            ];
+
+            Log::info('Renewing Microsoft Graph subscription', [
+                'subscription_id' => $subscriptionId,
+                'new_expiration' => $expirationDateTime,
+            ]);
+
+            // Make PATCH request to Microsoft Graph API
+            $response = Http::withToken($connection->access_token)
+                ->patch("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}", $requestBody);
+
+            Log::info('Microsoft Graph subscription renewal response', [
+                'status' => $response->status(),
+                'subscription_id' => $subscriptionId,
+            ]);
+
+            if ($response->failed()) {
+                $errorData = $response->json();
+                Log::error('Failed to renew Microsoft Graph subscription', [
+                    'status' => $response->status(),
+                    'error' => $errorData,
+                    'subscription_id' => $subscriptionId,
+                ]);
+
+                throw new Exception(
+                    'Failed to renew Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+                );
+            }
+
+            return $response->json();
+        } catch (Exception $e) {
+            Log::error('Exception while renewing Microsoft Graph subscription', [
+                'message' => $e->getMessage(),
+                'subscription_id' => $subscriptionId,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Delete a Microsoft Graph subscription.
+     */
+    public function deleteGraphSubscription(Office365Connection $connection, string $subscriptionId): bool
+    {
+        try {
+            // Check if token is expired and refresh if needed
+            if ($connection->isTokenExpired()) {
+                Log::info('Access token expired, refreshing before deleting subscription', [
+                    'connection_id' => $connection->id,
+                    'subscription_id' => $subscriptionId,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+            }
+
+            Log::info('Deleting Microsoft Graph subscription', [
+                'subscription_id' => $subscriptionId,
+            ]);
+
+            // Make DELETE request to Microsoft Graph API
+            $response = Http::withToken($connection->access_token)
+                ->delete("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}");
+
+            if ($response->status() === 204) {
+                Log::info('Successfully deleted Microsoft Graph subscription', [
+                    'subscription_id' => $subscriptionId,
+                ]);
+                return true;
+            }
+
+            if ($response->status() === 404) {
+                Log::warning('Microsoft Graph subscription already deleted or not found', [
+                    'subscription_id' => $subscriptionId,
+                ]);
+                return true;
+            }
+
+            // Other errors
+            $errorData = $response->json();
+            Log::error('Failed to delete Microsoft Graph subscription', [
+                'status' => $response->status(),
+                'error' => $errorData,
+                'subscription_id' => $subscriptionId,
+            ]);
+
+            throw new Exception(
+                'Failed to delete Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+            );
+        } catch (Exception $e) {
+            Log::error('Exception while deleting Microsoft Graph subscription', [
+                'message' => $e->getMessage(),
+                'subscription_id' => $subscriptionId,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Get Microsoft Graph subscription details.
+     */
+    public function getGraphSubscription(Office365Connection $connection, string $subscriptionId): array
+    {
+        try {
+            // Check if token is expired and refresh if needed
+            if ($connection->isTokenExpired()) {
+                Log::info('Access token expired, refreshing before fetching subscription', [
+                    'connection_id' => $connection->id,
+                    'subscription_id' => $subscriptionId,
+                ]);
+                $tokenData = $this->refreshAccessToken($connection);
+                $connection->update([
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'token_expires_at' => $tokenData['expires_at'],
+                ]);
+            }
+
+            Log::info('Fetching Microsoft Graph subscription details', [
+                'subscription_id' => $subscriptionId,
+            ]);
+
+            // Make GET request to Microsoft Graph API
+            $response = Http::withToken($connection->access_token)
+                ->get("https://graph.microsoft.com/v1.0/subscriptions/{$subscriptionId}");
+
+            Log::info('Microsoft Graph subscription fetch response', [
+                'status' => $response->status(),
+                'subscription_id' => $subscriptionId,
+            ]);
+
+            if ($response->failed()) {
+                $errorData = $response->json();
+                Log::error('Failed to fetch Microsoft Graph subscription', [
+                    'status' => $response->status(),
+                    'error' => $errorData,
+                    'subscription_id' => $subscriptionId,
+                ]);
+
+                throw new Exception(
+                    'Failed to fetch Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+                );
+            }
+
+            return $response->json();
+        } catch (Exception $e) {
+            Log::error('Exception while fetching Microsoft Graph subscription', [
+                'message' => $e->getMessage(),
+                'subscription_id' => $subscriptionId,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e;
+        }
+    }
+
 }
