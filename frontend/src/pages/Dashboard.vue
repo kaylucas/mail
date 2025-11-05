@@ -35,10 +35,16 @@ const fetchUserData = async () => {
 const handleLogout = async () => {
   try {
     await axios.post('/api/logout')
+    // Clear token from localStorage
+    localStorage.removeItem('auth_token')
+    delete axios.defaults.headers.common['Authorization']
     router.push({ name: 'Login' })
   } catch (error) {
     console.error('Logout failed:', error)
-    errorMessage.value = 'Failed to logout'
+    // Even if logout fails, clear token and redirect
+    localStorage.removeItem('auth_token')
+    delete axios.defaults.headers.common['Authorization']
+    router.push({ name: 'Login' })
   }
 }
 

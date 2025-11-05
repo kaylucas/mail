@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import axios from '../axios'
 import Login from '../pages/Login.vue'
 import Dashboard from '../pages/Dashboard.vue'
+import AuthCallback from '../pages/AuthCallback.vue'
 
 const routes = [
   {
@@ -9,6 +10,12 @@ const routes = [
     name: 'Login',
     component: Login,
     meta: { guest: true }
+  },
+  {
+    path: '/auth/callback',
+    name: 'AuthCallback',
+    component: AuthCallback,
+    meta: { public: true }
   },
   {
     path: '/dashboard',
@@ -23,21 +30,32 @@ const router = createRouter({
   routes
 })
 
-// Navigation guard
-// Note: Cross-origin authentication between localhost:5173 and mail.loc
-// may require browser to allow credentials. Check browser console for CORS errors.
+// Navigation guard for token-based authentication
 router.beforeEach(async (to, from, next) => {
+  const token = localStorage.getItem('auth_token')
+
+  // Public routes (like auth callback)
+  if (to.meta.public) {
+    next()
+    return
+  }
+
   if (to.meta.requiresAuth) {
+    if (!token) {
+      // No token, redirect to login
+      next({ name: 'Login' })
+      return
+    }
+
     try {
-      // Verify authentication by fetching user
+      // Verify token is valid by fetching user
       await axios.get('/api/user')
       next()
     } catch (error) {
       if (error.response?.status === 401) {
-        // Not authenticated
-        next({ name: 'Login' })
-      } else if (error.response?.status === 419) {
-        // CSRF token mismatch - redirect to login
+        // Token invalid, clear it and redirect to login
+        localStorage.removeItem('auth_token')
+        delete axios.defaults.headers.common['Authorization']
         next({ name: 'Login' })
       } else {
         // Network error or other issue
@@ -46,23 +64,21 @@ router.beforeEach(async (to, from, next) => {
       }
     }
   } else if (to.meta.guest) {
-    try {
-      // Check if already authenticated
-      await axios.get('/api/user')
-      // Already authenticated, redirect to dashboard
-      next({ name: 'Dashboard' })
-    } catch (error) {
-      if (error.response?.status === 401) {
-        // Not authenticated, proceed to guest route
-        next()
-      } else if (error.response?.status === 419) {
-        // CSRF token mismatch - proceed to guest route
-        next()
-      } else {
-        // Network error or other issue
-        console.error('Auth check failed:', error)
+    if (token) {
+      try {
+        // Check if token is still valid
+        await axios.get('/api/user')
+        // Token valid, redirect to dashboard
+        next({ name: 'Dashboard' })
+      } catch (error) {
+        // Token invalid, clear it and proceed to guest route
+        localStorage.removeItem('auth_token')
+        delete axios.defaults.headers.common['Authorization']
         next()
       }
+    } else {
+      // No token, proceed to guest route
+      next()
     }
   } else {
     next()

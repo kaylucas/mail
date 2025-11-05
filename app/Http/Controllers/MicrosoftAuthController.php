@@ -219,24 +219,18 @@ class MicrosoftAuthController extends Controller
                 ]
             );
 
-            // Log the user in
-            Auth::login($user);
-
-            // Store user ID in cache for session transfer
-            $sessionToken = Str::random(60);
-            Cache::put("auth_session_{$sessionToken}", $user->id, now()->addMinutes(5));
+            // Generate Sanctum API token for the user
+            $apiToken = $user->createToken('auth_token')->plainTextToken;
 
             Log::info('User authenticated successfully', [
                 'user_id' => $user->id,
                 'user_email' => $user->email,
-                'session_token' => $sessionToken,
             ]);
 
-            // Redirect to local backend to establish session, then to frontend
-            // This is necessary because the OAuth callback happens on ngrok (HTTPS) but
-            // the app runs on mail.loc (HTTP). We need to establish the session on the correct domain.
+            // Redirect to frontend with the API token
+            // The token is passed in the URL hash so it's not sent to the server
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-            return redirect("http://mail.loc/auth/session?token={$sessionToken}&redirect=" . urlencode("{$frontendUrl}/#/dashboard"));
+            return redirect("{$frontendUrl}/#/auth/callback?token={$apiToken}");
         } catch (Exception $e) {
             Log::error('Microsoft auth callback failed', [
                 'message' => $e->getMessage(),
@@ -249,71 +243,26 @@ class MicrosoftAuthController extends Controller
     }
 
     /**
-     * Establish session on the local domain after OAuth callback.
-     * This is needed because OAuth callback happens on ngrok (HTTPS) but
-     * the app runs on mail.loc (HTTP), and session cookies need to be
-     * established on the correct domain.
+     * This endpoint is no longer needed with token-based auth.
+     * Kept for backwards compatibility but redirects to frontend.
+     *
+     * @deprecated Use token-based auth instead
      */
     public function establishSession(Request $request)
     {
-        try {
-            $token = $request->query('token');
-            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-            $redirect = $request->query('redirect', "{$frontendUrl}/#/dashboard");
-
-            if (!$token) {
-                throw new Exception('Missing session token');
-            }
-
-            // Get user ID from cache
-            $cacheKey = "auth_session_{$token}";
-            $userId = Cache::get($cacheKey);
-
-            if (!$userId) {
-                throw new Exception('Invalid or expired session token');
-            }
-
-            // Delete the token from cache (single use)
-            Cache::forget($cacheKey);
-
-            // Find user
-            $user = User::find($userId);
-            if (!$user) {
-                throw new Exception('User not found');
-            }
-
-            // Log the user in and regenerate session
-            Auth::login($user);
-            $request->session()->regenerate();
-
-            Log::info('Session established on local domain', [
-                'user_id' => $user->id,
-                'session_id' => $request->session()->getId(),
-            ]);
-
-            // Redirect to frontend
-            return redirect($redirect);
-        } catch (Exception $e) {
-            Log::error('Session establishment failed', [
-                'message' => $e->getMessage(),
-            ]);
-
-            $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
-            return redirect("{$frontendUrl}/#/?error=session_failed");
-        }
+        $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+        return redirect("{$frontendUrl}/#/?error=deprecated_endpoint");
     }
 
     /**
-     * Logout the user.
+     * Logout the user by revoking their API token.
      */
     public function logout(Request $request)
     {
-        Auth::logout();
+        // Revoke the current access token
+        $request->user()->currentAccessToken()->delete();
 
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return response()->noContent();
+        return response()->json(['message' => 'Logged out successfully']);
     }
 
     /**
@@ -321,11 +270,7 @@ class MicrosoftAuthController extends Controller
      */
     public function user(Request $request)
     {
-        if (!Auth::check()) {
-            return response()->json(['message' => 'Unauthenticated'], 401);
-        }
-
-        $user = Auth::user()->load('office365Connection');
+        $user = $request->user()->load('office365Connection');
 
         return response()->json($user);
     }

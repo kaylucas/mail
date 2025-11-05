@@ -81,34 +81,34 @@ php artisan migrate:rollback     # Rollback last migration
 
 ### Authentication Flow
 
-**Microsoft SSO Authentication (Primary):**
+**Microsoft SSO Authentication (Token-Based):**
 1. User clicks "Sign in with Microsoft" at `http://localhost:5173` → frontend redirects to backend `/auth/microsoft` (web route)
 2. `MicrosoftAuthController::redirect()` generates OAuth state, stores it in **cache**, redirects to Microsoft
 3. Microsoft redirects back to ngrok tunnel → `https://aery.eu.ngrok.io/auth/microsoft/callback` (web route)
-4. `MicrosoftAuthController::callback()` validates state from cache, exchanges code for tokens, creates/updates User and Office365Connection, logs user in
-5. **Session Transfer:** Callback creates temporary token in cache, redirects to `http://mail.loc/auth/session?token=xxx`
-6. `MicrosoftAuthController::establishSession()` validates token, logs in user on local domain, regenerates session
-7. Final redirect to `http://localhost:5173/#/dashboard` (frontend)
-8. Vue SPA uses Sanctum session cookies for authenticated API requests (cross-origin with credentials)
+4. `MicrosoftAuthController::callback()` validates state from cache, exchanges code for tokens, creates/updates User and Office365Connection
+5. **Token Generation:** Callback generates a Sanctum API token for the user
+6. Backend redirects to `http://localhost:5173/#/auth/callback?token={api_token}`
+7. Frontend `AuthCallback` component extracts token from URL, stores in localStorage, redirects to dashboard
+8. Vue SPA uses Bearer token in Authorization header for all authenticated API requests
 
 **Critical Security Details:**
 - OAuth state is stored in cache (10-minute TTL) with IP validation
 - State is single-use and deleted immediately after validation
-- Session transfer uses temporary tokens (5-minute TTL) to bridge ngrok → mail.loc
-- CSRF cookie must be initialized via `axios.get('/sanctum/csrf-cookie')` before any POST requests
-- `SANCTUM_STATEFUL_DOMAINS` must include `localhost:5173` and `mail.loc` for local development
+- API tokens are passed via URL hash (not sent to server) and stored in localStorage
+- All API requests include `Authorization: Bearer {token}` header
 - `CORS_ALLOWED_ORIGINS` must include `http://localhost:5173` for frontend access
-- Session is regenerated on the `mail.loc` domain after OAuth callback
-- All API requests are cross-origin (frontend on localhost:5173, backend on mail.loc)
+- Tokens can be revoked via `/api/logout` endpoint
+- No cookies or CSRF protection needed with token-based auth
 
 ### API Authentication
 
-The application uses **stateful Sanctum** (not token-based). Key configuration:
-- `bootstrap/app.php`: `$middleware->statefulApi()` enables session-based API auth
-- `axios.defaults.withCredentials = true` sends cookies with requests (configured in `frontend/src/axios.js`)
-- `frontend/src/axios.js`: CSRF cookie initialized on app load
+The application uses **Sanctum token-based authentication**. Key configuration:
+- `app/Models/User.php`: Uses `HasApiTokens` trait to issue API tokens
+- `frontend/src/axios.js`: Sets `Authorization: Bearer {token}` header for authenticated requests
+- Tokens are stored in browser localStorage and included in all API requests
 - Protected routes use `auth:sanctum` middleware in `routes/api.php`
 - Cross-origin requests are enabled via CORS configuration (`config/cors.php`)
+- No cookies or CSRF tokens required
 
 ### Configuration
 
@@ -121,6 +121,7 @@ The application uses **stateful Sanctum** (not token-based). Key configuration:
 ### Key Models & Relationships
 
 **User Model:**
+- Uses `HasApiTokens` trait for Sanctum token generation
 - Has one `Office365Connection` relationship
 - Fields: `microsoft_id`, `name`, `email`
 - Authenticated via Microsoft OAuth (no password field used for SSO users)
@@ -145,12 +146,12 @@ All methods use config values from `config/services.php`, with optional override
 
 ### Controllers
 
-**MicrosoftAuthController (Web Routes):**
-- `redirect()`: Initiates OAuth flow, stores state in cache
-- `callback()`: Handles OAuth callback (on ngrok), validates state, exchanges code for tokens, creates/updates user, generates session transfer token
-- `establishSession()`: Establishes session on mail.loc domain using transfer token, logs in user, redirects to dashboard
-- `logout()`: Logs out user, invalidates session (API endpoint)
-- `user()`: Returns authenticated user with `office365Connection` relationship (API endpoint)
+**MicrosoftAuthController (Web + API Routes):**
+- `redirect()`: Initiates OAuth flow, stores state in cache (web route)
+- `callback()`: Handles OAuth callback (on ngrok), validates state, exchanges code for tokens, creates/updates user, generates Sanctum API token, redirects to frontend with token (web route)
+- `establishSession()`: **[DEPRECATED]** No longer needed with token-based auth (web route)
+- `logout()`: Revokes current API token (API endpoint, `auth:sanctum` required)
+- `user()`: Returns authenticated user with `office365Connection` relationship (API endpoint, `auth:sanctum` required)
 
 **Office365ConnectionController (API Routes, `auth:sanctum` required):**
 - `store()`: Save/update Office365 connection config (credentials forced from config, cannot be overridden by client)
@@ -173,6 +174,7 @@ All methods use config values from `config/services.php`, with optional override
 
 **Pages:**
 - `frontend/src/pages/Login.vue`: Microsoft SSO login button
+- `frontend/src/pages/AuthCallback.vue`: Handles OAuth callback, extracts and stores token
 - `frontend/src/pages/Dashboard.vue`: Main authenticated view
 
 **Key Files:**
@@ -185,8 +187,8 @@ All methods use config values from `config/services.php`, with optional override
 
 **Web Routes (`routes/web.php`):**
 - `GET /auth/microsoft` → MicrosoftAuthController::redirect
-- `GET /auth/microsoft/callback` → MicrosoftAuthController::callback (receives callback from ngrok)
-- `GET /auth/session` → MicrosoftAuthController::establishSession (session transfer endpoint)
+- `GET /auth/microsoft/callback` → MicrosoftAuthController::callback (receives callback from ngrok, issues token)
+- `GET /auth/session` → **[DEPRECATED]** MicrosoftAuthController::establishSession
 - Note: Frontend runs separately, no catch-all route needed
 
 **API Routes (`routes/api.php`, protected by `auth:sanctum`):**
@@ -218,16 +220,16 @@ All methods use config values from `config/services.php`, with optional override
 
 ## Common Issues & Solutions
 
-### 419 CSRF Token Mismatch
-- Ensure `axios.get('/sanctum/csrf-cookie')` runs on app load (configured in `frontend/src/axios.js`)
-- Check `SANCTUM_STATEFUL_DOMAINS` includes `localhost:5173` and `mail.loc`
+### 401 Unauthenticated
+- Ensure token is stored in localStorage after OAuth callback
+- Check `Authorization` header is set in axios requests (`Bearer {token}`)
+- Token may have been revoked - re-authenticate via Microsoft SSO
 - Check `CORS_ALLOWED_ORIGINS` includes `http://localhost:5173`
-- Verify `axios.defaults.withCredentials = true` is set (in `frontend/src/axios.js`)
 
 ### OAuth State Validation Failed
-- State is stored in session, not cache - ensure sessions are working
-- State is single-use and expires with session
-- Do not share state between users (session-isolated)
+- State is stored in cache with 10-minute TTL
+- State is single-use and deleted after validation
+- IP mismatch may cause issues (can be disabled for mobile/VPN users)
 
 ### Token Refresh
 - Check `Office365Connection::isTokenExpired()` before using tokens
