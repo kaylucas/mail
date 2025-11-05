@@ -24,6 +24,8 @@ class User extends Authenticatable
         'password',
         'microsoft_id',
         'avatar',
+        'email_delta_token',
+        'last_email_sync_at',
     ];
 
     /**
@@ -45,6 +47,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_email_sync_at' => 'datetime',
         ];
     }
 
@@ -54,5 +57,66 @@ class User extends Authenticatable
     public function office365Connection()
     {
         return $this->hasOne(Office365Connection::class);
+    }
+
+    /**
+     * Get the email folders for the user.
+     */
+    public function emailFolders()
+    {
+        return $this->hasMany(EmailFolder::class);
+    }
+
+    /**
+     * Get the emails for the user.
+     */
+    public function emails()
+    {
+        return $this->hasMany(Email::class);
+    }
+
+    /**
+     * Get the graph subscriptions for the user.
+     */
+    public function graphSubscriptions()
+    {
+        return $this->hasMany(GraphSubscription::class);
+    }
+
+    /**
+     * Get the active email subscription for the user.
+     */
+    public function activeEmailSubscription()
+    {
+        return $this->hasOne(GraphSubscription::class)
+            ->where('status', 'active')
+            ->where('expires_at', '>', now());
+    }
+
+    /**
+     * Check if the user has a delta token.
+     */
+    public function hasDeltaToken(): bool
+    {
+        return $this->email_delta_token !== null;
+    }
+
+    /**
+     * Clear the delta token.
+     */
+    public function clearDeltaToken(): bool
+    {
+        return $this->update(['email_delta_token' => null]);
+    }
+
+    /**
+     * Update the delta token.
+     */
+    public function updateDeltaToken(string $token): bool
+    {
+        return $this->update([
+            'email_delta_token' => $token,
+            'last_email_sync_at' => now(),
+        ]);
     }
 }

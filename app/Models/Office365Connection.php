@@ -66,6 +66,30 @@ class Office365Connection extends Model
     }
 
     /**
+     * Get the email folders for this connection.
+     */
+    public function emailFolders()
+    {
+        return $this->hasMany(EmailFolder::class);
+    }
+
+    /**
+     * Get the emails for this connection.
+     */
+    public function emails()
+    {
+        return $this->hasMany(Email::class);
+    }
+
+    /**
+     * Get the graph subscriptions for this connection.
+     */
+    public function graphSubscriptions()
+    {
+        return $this->hasMany(GraphSubscription::class);
+    }
+
+    /**
      * Check if the access token is expired.
      */
     public function isTokenExpired(): bool
