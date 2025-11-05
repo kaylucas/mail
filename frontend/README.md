@@ -63,8 +63,8 @@ The application uses Laravel Sanctum for session-based authentication:
 
 ```
 frontend/
-├── public/           # Static assets
-│   └── index.html    # HTML template
+├── index.html        # HTML template (root level for Vite)
+├── public/           # Static assets (copied as-is)
 ├── src/
 │   ├── pages/        # Page components
 │   ├── router/       # Vue Router configuration
