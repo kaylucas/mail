@@ -10,7 +10,7 @@ axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/'
 axios.defaults.baseURL = API_BASE_URL
 
-// Set auth token from localStorage if available
+// Set auth token from localStorage if available on initial load
 const token = localStorage.getItem('auth_token')
 if (token) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
@@ -21,13 +21,23 @@ axios.interceptors.response.use(
     response => response,
     async error => {
         if (error.response?.status === 401) {
-            // Unauthorized - remove invalid token and redirect to login
+            // Unauthorized - remove invalid token and clear auth cache
             localStorage.removeItem('auth_token')
             delete axios.defaults.headers.common['Authorization']
 
-            // Only redirect if we're in a browser context
+            // Clear authentication cache in router if available
             if (typeof window !== 'undefined') {
-                window.location.href = '/#/?error=unauthorized'
+                // Dynamically import to avoid circular dependency
+                const routerModule = await import('./router/index.js')
+                if (routerModule.clearAuthState) {
+                    routerModule.clearAuthState()
+                }
+
+                // Only redirect if we're not already on login page
+                const currentHash = window.location.hash
+                if (!currentHash.includes('/auth/callback') && !currentHash.includes('/?')) {
+                    window.location.href = '/#/?error=unauthorized'
+                }
             }
         }
         return Promise.reject(error)

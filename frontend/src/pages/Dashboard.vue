@@ -2,7 +2,9 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { clearAuthState } from '../router/index.js'
 import { Dialog, DialogPanel, DialogTitle, TransitionRoot, TransitionChild } from '@headlessui/vue'
+import EmailSyncIndicator from '../components/EmailSyncIndicator.vue'
 
 const router = useRouter()
 const user = ref(null)
@@ -35,15 +37,13 @@ const fetchUserData = async () => {
 const handleLogout = async () => {
   try {
     await axios.post('/api/logout')
-    // Clear token from localStorage
-    localStorage.removeItem('auth_token')
-    delete axios.defaults.headers.common['Authorization']
+    // Clear auth state using router helper
+    clearAuthState()
     router.push({ name: 'Login' })
   } catch (error) {
     console.error('Logout failed:', error)
-    // Even if logout fails, clear token and redirect
-    localStorage.removeItem('auth_token')
-    delete axios.defaults.headers.common['Authorization']
+    // Even if logout fails, clear auth state and redirect
+    clearAuthState()
     router.push({ name: 'Login' })
   }
 }
@@ -83,6 +83,9 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen bg-gray-50">
+    <!-- Email Sync Status Indicator -->
+    <EmailSyncIndicator />
+
     <!-- Header -->
     <header class="bg-white shadow-sm border-b">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">

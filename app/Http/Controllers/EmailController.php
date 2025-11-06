@@ -11,9 +11,6 @@ class EmailController extends Controller
 {
     /**
      * List emails for authenticated user with pagination and filters.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -71,30 +68,26 @@ class EmailController extends Controller
                 'user_id' => $user->id,
                 'total' => $emails->total(),
                 'per_page' => $perPage,
-                'current_page' => $emails->currentPage()
+                'current_page' => $emails->currentPage(),
             ]);
 
             return response()->json($emails, 200);
         } catch (\Exception $e) {
             Log::error('Failed to list emails', [
                 'user_id' => auth()->id(),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
             ]);
 
             return response()->json([
                 'message' => 'Failed to retrieve emails',
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
             ], 500);
         }
     }
 
     /**
      * Get a single email by ID.
-     *
-     * @param Request $request
-     * @param int $id
-     * @return JsonResponse
      */
     public function show(Request $request, int $id): JsonResponse
     {
@@ -106,41 +99,38 @@ class EmailController extends Controller
                 ->with(['folder', 'attachments'])
                 ->first();
 
-            if (!$email) {
+            if (! $email) {
                 return response()->json([
-                    'message' => 'Email not found'
+                    'message' => 'Email not found',
                 ], 404);
             }
 
             Log::info('Email viewed', [
                 'user_id' => $user->id,
                 'email_id' => $email->id,
-                'subject' => $email->subject
+                'subject' => $email->subject,
             ]);
 
             return response()->json([
-                'data' => $email
+                'data' => $email,
             ], 200);
         } catch (\Exception $e) {
             Log::error('Failed to retrieve email', [
                 'user_id' => auth()->id(),
                 'email_id' => $id,
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
             ]);
 
             return response()->json([
                 'message' => 'Failed to retrieve email',
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
             ], 500);
         }
     }
 
     /**
      * Mark email as read or unread.
-     *
-     * @param Request $request
-     * @param int $id
-     * @return JsonResponse
      */
     public function updateReadStatus(Request $request, int $id): JsonResponse
     {
@@ -148,52 +138,50 @@ class EmailController extends Controller
             $user = auth()->user();
 
             $validated = $request->validate([
-                'is_read' => 'required|boolean'
+                'is_read' => 'required|boolean',
             ]);
 
             $email = Email::where('user_id', $user->id)
                 ->where('id', $id)
                 ->first();
 
-            if (!$email) {
+            if (! $email) {
                 return response()->json([
-                    'message' => 'Email not found'
+                    'message' => 'Email not found',
                 ], 404);
             }
 
             $email->update([
-                'is_read' => $validated['is_read']
+                'is_read' => $validated['is_read'],
             ]);
 
             Log::info('Email read status updated', [
                 'user_id' => $user->id,
                 'email_id' => $email->id,
-                'is_read' => $validated['is_read']
+                'is_read' => $validated['is_read'],
             ]);
 
             return response()->json([
                 'message' => 'Email read status updated',
-                'data' => $email
+                'data' => $email,
             ], 200);
         } catch (\Exception $e) {
             Log::error('Failed to update email read status', [
                 'user_id' => auth()->id(),
                 'email_id' => $id,
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
             ]);
 
             return response()->json([
                 'message' => 'Failed to update email read status',
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
             ], 500);
         }
     }
 
     /**
      * Get email folders for authenticated user.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function folders(Request $request): JsonResponse
     {
@@ -206,30 +194,28 @@ class EmailController extends Controller
 
             Log::info('Email folders listed', [
                 'user_id' => $user->id,
-                'folder_count' => $folders->count()
+                'folder_count' => $folders->count(),
             ]);
 
             return response()->json([
-                'data' => $folders
+                'data' => $folders,
             ], 200);
         } catch (\Exception $e) {
             Log::error('Failed to list email folders', [
                 'user_id' => auth()->id(),
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
             ]);
 
             return response()->json([
                 'message' => 'Failed to retrieve email folders',
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
             ], 500);
         }
     }
 
     /**
      * Get email statistics for authenticated user.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function stats(Request $request): JsonResponse
     {
@@ -247,21 +233,22 @@ class EmailController extends Controller
 
             Log::info('Email statistics retrieved', [
                 'user_id' => $user->id,
-                'total_emails' => $stats['total_emails']
+                'total_emails' => $stats['total_emails'],
             ]);
 
             return response()->json([
-                'data' => $stats
+                'data' => $stats,
             ], 200);
         } catch (\Exception $e) {
             Log::error('Failed to retrieve email statistics', [
                 'user_id' => auth()->id(),
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
             ]);
 
             return response()->json([
                 'message' => 'Failed to retrieve email statistics',
-                'error' => $e->getMessage()
+                'error' => $this->sanitizeErrorMessage($e->getMessage()),
             ], 500);
         }
     }

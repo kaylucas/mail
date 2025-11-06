@@ -15,11 +15,21 @@ onMounted(async () => {
     // Store token in localStorage
     localStorage.setItem('auth_token', token)
 
-    // Set token in axios defaults
+    // Set token in axios defaults immediately
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
 
-    // Redirect to dashboard
-    router.push('/dashboard')
+    // Verify token is valid and cache authentication state
+    try {
+      await axios.get('/api/user')
+      // Token is valid, router guard will cache this on navigation
+      router.push('/dashboard')
+    } catch (error) {
+      console.error('Token validation failed:', error)
+      // Token is invalid, clear it and redirect to login
+      localStorage.removeItem('auth_token')
+      delete axios.defaults.headers.common['Authorization']
+      router.push('/?error=invalid_token')
+    }
   } else {
     // No token, redirect to login with error
     router.push('/?error=no_token')

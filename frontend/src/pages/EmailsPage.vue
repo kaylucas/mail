@@ -1,5 +1,8 @@
 <template>
   <div class="h-screen flex flex-col">
+    <!-- Email Sync Status Indicator -->
+    <EmailSyncIndicator />
+
     <!-- Header -->
     <header class="bg-white border-b border-gray-200 px-6 py-4">
       <div class="max-w-7xl mx-auto flex items-center justify-between">
@@ -141,6 +144,7 @@ import { ref } from 'vue'
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue'
 import { ArrowPathIcon, XMarkIcon, DocumentIcon } from '@heroicons/vue/24/outline'
 import EmailInbox from '../components/EmailInbox.vue'
+import EmailSyncIndicator from '../components/EmailSyncIndicator.vue'
 import { formatFullDateTime, formatFileSize } from '../utils/dateFormat'
 
 const selectedEmail = ref(null)

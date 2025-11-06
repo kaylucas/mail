@@ -56,11 +56,12 @@ class MicrosoftAuthController extends Controller
             return redirect($authUrl);
         } catch (Exception $e) {
             Log::error('Microsoft auth redirect failed', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'message' => $this->sanitizeErrorMessage($e->getMessage()),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
             ]);
 
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+
             return redirect("{$frontendUrl}/#/?error=auth_redirect_failed");
         }
     }
@@ -85,12 +86,12 @@ class MicrosoftAuthController extends Controller
             $state = $request->query('state');
 
             Log::info('OAuth parameters extracted', [
-                'has_code' => !empty($code),
+                'has_code' => ! empty($code),
                 'code_length' => $code ? strlen($code) : 0,
                 'state_from_query' => $state,
             ]);
 
-            if (!$code || !$state) {
+            if (! $code || ! $state) {
                 throw new Exception('Missing authorization code or state');
             }
 
@@ -107,7 +108,7 @@ class MicrosoftAuthController extends Controller
                 'current_ip' => $request->ip(),
             ]);
 
-            if (!$cachedData) {
+            if (! $cachedData) {
                 Log::error('State validation failed - not found in cache', [
                     'state' => $state,
                     'cache_key' => $cacheKey,
@@ -207,17 +208,46 @@ class MicrosoftAuthController extends Controller
                 'user_email' => $user->email,
             ]);
 
+            // Trigger automatic email sync for new users
+            // Only sync if user has no delta token and no emails yet
+            if (! $user->hasDeltaToken() && ! $user->emails()->exists()) {
+                // Calculate 7 days ago in ISO 8601 format
+                $sevenDaysAgo = now()->subDays(7)->toIso8601String();
+                $filter = "receivedDateTime ge {$sevenDaysAgo}";
+
+                Log::info('Dispatching initial email sync for new user', [
+                    'user_id' => $user->id,
+                    'filter' => $filter,
+                ]);
+
+                // Dispatch job and capture job UUID
+                $job = \App\Jobs\InitialEmailSyncJob::dispatch($user, $filter);
+
+                // Store job ID for status tracking
+                $user->update([
+                    'current_sync_job_id' => $job->id ?? null,
+                    'sync_started_at' => now(),
+                ]);
+
+                Log::info('Sync job dispatched and tracked', [
+                    'user_id' => $user->id,
+                    'job_id' => $job->id ?? null,
+                ]);
+            }
+
             // Redirect to frontend with the API token
             // The token is passed in the URL hash so it's not sent to the server
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+
             return redirect("{$frontendUrl}/#/auth/callback?token={$apiToken}");
         } catch (Exception $e) {
             Log::error('Microsoft auth callback failed', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'message' => $this->sanitizeErrorMessage($e->getMessage()),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
             ]);
 
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+
             return redirect("{$frontendUrl}/#/?error=auth_failed");
         }
     }
@@ -231,6 +261,7 @@ class MicrosoftAuthController extends Controller
     public function establishSession(Request $request)
     {
         $frontendUrl = config('app.frontend_url', 'http://localhost:5173');
+
         return redirect("{$frontendUrl}/#/?error=deprecated_endpoint");
     }
 

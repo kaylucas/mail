@@ -6,13 +6,15 @@ use App\Models\User;
 use App\Services\EmailSyncService;
 use App\Services\GraphSubscriptionService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-class InitialEmailSyncJob implements ShouldQueue
+class InitialEmailSyncJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -38,6 +40,13 @@ class InitialEmailSyncJob implements ShouldQueue
     public int $maxExceptions = 3;
 
     /**
+     * The number of seconds after which the job's unique lock will be released.
+     *
+     * @var int
+     */
+    public int $uniqueFor = 3600;
+
+    /**
      * The user to sync emails for.
      *
      * @var User
@@ -45,11 +54,19 @@ class InitialEmailSyncJob implements ShouldQueue
     protected User $user;
 
     /**
+     * Optional OData filter for date range filtering.
+     *
+     * @var string|null
+     */
+    protected ?string $filter = null;
+
+    /**
      * Create a new job instance.
      */
-    public function __construct(User $user)
+    public function __construct(User $user, ?string $filter = null)
     {
         $this->user = $user;
+        $this->filter = $filter;
     }
 
     /**
@@ -61,7 +78,8 @@ class InitialEmailSyncJob implements ShouldQueue
             Log::info('InitialEmailSyncJob started', [
                 'user_id' => $this->user->id,
                 'job_uuid' => $this->job->uuid(),
-                'attempt' => $this->attempts()
+                'attempt' => $this->attempts(),
+                'filter' => $this->filter
             ]);
 
             // Check if user has Office365Connection
@@ -69,8 +87,8 @@ class InitialEmailSyncJob implements ShouldQueue
                 throw new \Exception("User {$this->user->id} has no Office365 connection");
             }
 
-            // Perform initial sync
-            $result = $emailSyncService->initialSync($this->user);
+            // Perform initial sync (with optional filter)
+            $result = $emailSyncService->initialSync($this->user, $this->filter);
 
             $messagesSynced = $result['messages_synced'];
             $foldersSynced = $result['folders_synced'];
@@ -82,6 +100,14 @@ class InitialEmailSyncJob implements ShouldQueue
                 'folders_synced' => $foldersSynced,
                 'has_delta_token' => !empty($deltaToken)
             ]);
+
+            // Clear current_sync_job_id when complete
+            $this->user->update([
+                'current_sync_job_id' => null,
+            ]);
+
+            // Clean up progress cache after completion
+            Cache::forget("sync_progress_{$this->user->id}");
 
             // Dispatch subscription creation job
             CreateUserSubscriptionJob::dispatch($this->user);
@@ -104,6 +130,15 @@ class InitialEmailSyncJob implements ShouldQueue
             // Re-throw to trigger retry
             throw $e;
         }
+    }
+
+    /**
+     * Get the unique ID for the job.
+     * Prevents duplicate sync jobs for the same user.
+     */
+    public function uniqueId(): string
+    {
+        return "initial-email-sync-{$this->user->id}";
     }
 
     /**

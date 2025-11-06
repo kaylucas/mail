@@ -43,7 +43,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Email Sync Routes
     Route::prefix('emails/sync')->group(function () {
-        Route::post('/initial', [EmailSyncController::class, 'initialSync'])->name('emails.sync.initial');
+        Route::post('/initial', [EmailSyncController::class, 'initialSync'])
+            ->name('emails.sync.initial')
+            ->middleware('throttle:5,60');  // 5 sync requests per hour per user
+        // Rate limited to 20 requests per minute to prevent polling abuse
+        Route::get('/status', [EmailSyncController::class, 'currentStatus'])
+            ->name('emails.sync.current_status')
+            ->middleware('throttle:20,1');
         Route::get('/status/{jobId}', [EmailSyncController::class, 'status'])->name('emails.sync.status');
     });
 

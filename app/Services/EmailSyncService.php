@@ -7,6 +7,7 @@ use App\Models\EmailAttachment;
 use App\Models\EmailFolder;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -90,10 +91,11 @@ class EmailSyncService
      * Perform initial delta query to sync all messages
      *
      * @param User $user
+     * @param string|null $filter Optional OData filter (e.g., 'receivedDateTime ge 2025-10-30T00:00:00Z')
      * @return array
      * @throws \Exception
      */
-    public function initialSync(User $user): array
+    public function initialSync(User $user, ?string $filter = null): array
     {
         try {
             Log::info('Starting initial email sync', ['user_id' => $user->id]);
@@ -119,6 +121,25 @@ class EmailSyncService
 
             // Start delta query
             $url = 'https://graph.microsoft.com/v1.0/me/messages/delta?$select=id,subject,body,bodyPreview,from,toRecipients,ccRecipients,bccRecipients,replyTo,sender,receivedDateTime,sentDateTime,hasAttachments,isRead,isDraft,importance,flag,categories,conversationId,internetMessageId,webLink,parentFolderId&$top=100';
+
+            // Add filter if provided (e.g., last 7 days)
+            if ($filter) {
+                // Validate filter syntax before using
+                if (!$this->isValidODataFilter($filter)) {
+                    Log::warning('Invalid OData filter provided', [
+                        'user_id' => $user->id,
+                        'filter' => $filter
+                    ]);
+                    throw new \InvalidArgumentException("Invalid OData filter syntax: {$filter}");
+                }
+
+                $url .= '&$filter=' . rawurlencode($filter);
+                Log::info('Applying filter to initial sync', [
+                    'user_id' => $user->id,
+                    'filter' => $filter,
+                    'encoded' => rawurlencode($filter)
+                ]);
+            }
 
             while ($url) {
                 $response = Http::withToken($connection->access_token)
@@ -147,6 +168,16 @@ class EmailSyncService
                 foreach ($messages as $messageData) {
                     $this->storeMessage($user, $messageData);
                     $messagesSynced++;
+                }
+
+                // Update progress in cache every 5 pages
+                if ($pagesProcessed % 5 === 0) {
+                    Cache::put("sync_progress_{$user->id}", [
+                        'folders_synced' => $folderResult['folders_synced'] ?? 0,
+                        'messages_synced' => $messagesSynced,
+                        'current_page' => $pagesProcessed,
+                        'last_updated' => now()->toIso8601String(),
+                    ], 3600); // 1 hour TTL
                 }
 
                 // Log progress every 10 pages
@@ -529,6 +560,21 @@ class EmailSyncService
                 'email' => $recipient['emailAddress']['address'] ?? null
             ];
         }, $recipients);
+    }
+
+    /**
+     * Validate OData filter syntax for Microsoft Graph API
+     *
+     * @param string $filter
+     * @return bool
+     */
+    private function isValidODataFilter(string $filter): bool
+    {
+        // Check for basic OData filter pattern
+        // Allowed: receivedDateTime/sentDateTime/createdDateTime ge/le/eq/ne/gt/lt ISO8601_DATE
+        $pattern = '/^(receivedDateTime|sentDateTime|createdDateTime)\s+(ge|le|eq|ne|gt|lt)\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([+-]\d{2}:\d{2}|Z)$/';
+
+        return preg_match($pattern, $filter) === 1;
     }
 
     /**

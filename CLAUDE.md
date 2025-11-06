@@ -100,6 +100,103 @@ php artisan migrate:rollback     # Rollback last migration
 - Tokens can be revoked via `/api/logout` endpoint
 - No cookies or CSRF protection needed with token-based auth
 
+**Security Improvements (2025-11-06):**
+- SQL injection protection: Job IDs validated before database queries
+- Error message sanitization: All exceptions sanitized to prevent data exposure
+- Rate limiting: Sync endpoints limited to prevent abuse (5 syncs/hour, 20 status checks/min)
+- Production logs: Stack traces hidden in production environment
+- See [docs/SECURITY_FIXES.md](docs/SECURITY_FIXES.md) for complete details
+
+### Automatic Email Sync
+
+**Trigger Conditions:**
+The system automatically syncs emails for new users immediately after successful OAuth authentication if:
+1. User has no stored delta token (`email_delta_token` is null)
+2. User has no existing emails in the database
+3. User has an active Office365 connection
+
+**Sync Process:**
+1. **OAuth Callback** - User authenticates via Microsoft → `MicrosoftAuthController::callback()`
+2. **Trigger Check** - System checks if user needs initial sync
+3. **Job Dispatch** - `InitialEmailSyncJob` dispatched with 7-day filter
+   - Filter: `receivedDateTime ge {7 days ago in ISO 8601}`
+   - Example: `receivedDateTime ge 2025-10-30T00:00:00Z`
+4. **Folder Sync** - Job syncs email folders first
+5. **Email Sync** - Job fetches last 7 days of emails via Microsoft Graph delta query
+6. **Delta Token** - Job stores delta token for future incremental syncs
+7. **Webhook Setup** - `CreateUserSubscriptionJob` creates webhook subscription
+8. **Ready** - User can now receive real-time email notifications
+
+**Job Chain:**
+```
+MicrosoftAuthController::callback()
+  └─> InitialEmailSyncJob (with 7-day filter)
+      ├─> EmailSyncService::syncFolders()
+      ├─> EmailSyncService::initialSync($user, $filter)
+      │   └─> Stores emails + delta token
+      └─> CreateUserSubscriptionJob
+          └─> GraphSubscriptionService::createSubscription()
+              └─> Webhook ready for real-time updates
+```
+
+**Configuration:**
+- **Sync Window:** Defaults to 7 days (configurable in `MicrosoftAuthController.php` line 214)
+- **Queue:** Jobs run on default queue
+- **Retry Logic:** 3 attempts with exponential backoff
+- **Timeout:** 600 seconds (10 minutes)
+- **Deduplication:** 1 hour uniqueness window (prevents duplicate syncs)
+
+**Idempotency:**
+- `InitialEmailSyncJob` implements `ShouldBeUnique` interface
+- Unique ID: `"initial-email-sync-{user_id}"`
+- Multiple login attempts within 1 hour won't trigger duplicate syncs
+- Sync only runs if user has no delta token and no emails
+
+**Security:**
+- Filter parameter validates OData syntax (regex validation)
+- Only allows: `receivedDateTime/sentDateTime/createdDateTime` fields
+- Only allows operators: `ge`, `le`, `eq`, `ne`, `gt`, `lt`
+- Date format must be ISO 8601 with timezone
+- Filter is URL-encoded using `rawurlencode()` (RFC 3986)
+- Invalid filter throws `\InvalidArgumentException`
+
+**Observability:**
+All operations are logged with context:
+- Job dispatch: `'Dispatching initial email sync for new user'`
+- Job start: `'InitialEmailSyncJob started'` (includes filter)
+- Filter applied: `'Applying filter to initial sync'` (includes encoded filter)
+- Job complete: `'Initial sync completed in job'` (includes counts)
+- Job failed: `'InitialEmailSyncJob failed'` (includes error details)
+
+**Monitoring:**
+Check logs for sync status:
+```bash
+# Tail logs
+php artisan pail
+
+# Search for sync jobs
+grep "InitialEmailSyncJob" storage/logs/laravel.log
+
+# Check for failures
+grep "InitialEmailSyncJob failed" storage/logs/laravel.log
+```
+
+**Manual Triggering:**
+You can manually trigger sync for a user:
+```php
+use App\Jobs\InitialEmailSyncJob;
+use App\Models\User;
+
+$user = User::find($userId);
+
+// Full sync (all emails)
+InitialEmailSyncJob::dispatch($user);
+
+// Filtered sync (last 30 days)
+$filter = "receivedDateTime ge " . now()->subDays(30)->toIso8601String();
+InitialEmailSyncJob::dispatch($user, $filter);
+```
+
 ### API Authentication
 
 The application uses **Sanctum token-based authentication**. Key configuration:
@@ -123,7 +220,8 @@ The application uses **Sanctum token-based authentication**. Key configuration:
 **User Model:**
 - Uses `HasApiTokens` trait for Sanctum token generation
 - Has one `Office365Connection` relationship
-- Fields: `microsoft_id`, `name`, `email`
+- Fields: `microsoft_id`, `name`, `email`, `email_delta_token`, `last_email_sync_at`
+- Methods: `hasDeltaToken()`, `updateDeltaToken($token)`, `clearDeltaToken()`
 - Authenticated via Microsoft OAuth (no password field used for SSO users)
 
 **Office365Connection Model:**
@@ -144,11 +242,17 @@ The application uses **Sanctum token-based authentication**. Key configuration:
 
 All methods use config values from `config/services.php`, with optional overrides from connection model.
 
+**EmailSyncService:**
+- `syncFolders(user)`: Syncs all email folders from Microsoft Graph
+- `initialSync(user, filter)`: Performs initial delta query to sync messages with optional date filter
+- `processDeltaSync(user)`: Performs incremental sync using stored delta token
+- `syncSingleMessage(user, messageId)`: Fetches and stores a single message by ID
+
 ### Controllers
 
 **MicrosoftAuthController (Web + API Routes):**
 - `redirect()`: Initiates OAuth flow, stores state in cache (web route)
-- `callback()`: Handles OAuth callback (on ngrok), validates state, exchanges code for tokens, creates/updates user, generates Sanctum API token, redirects to frontend with token (web route)
+- `callback()`: Handles OAuth callback (on ngrok), validates state, exchanges code for tokens, creates/updates user, generates Sanctum API token, **triggers automatic email sync**, redirects to frontend with token (web route)
 - `establishSession()`: **[DEPRECATED]** No longer needed with token-based auth (web route)
 - `logout()`: Revokes current API token (API endpoint, `auth:sanctum` required)
 - `user()`: Returns authenticated user with `office365Connection` relationship (API endpoint, `auth:sanctum` required)
@@ -204,6 +308,8 @@ All methods use config values from `config/services.php`, with optional override
 **users table:**
 - `microsoft_id` (nullable, unique): Microsoft Graph user ID
 - `name`, `email`
+- `email_delta_token` (nullable): Microsoft Graph delta token for incremental email sync
+- `last_email_sync_at` (nullable timestamp): Last time emails were synced
 - No password field used for SSO users
 
 **office365_connections table:**
@@ -217,6 +323,7 @@ All methods use config values from `config/services.php`, with optional override
 
 **Other tables:**
 - Standard Laravel cache, jobs, sessions, personal_access_tokens (Sanctum)
+- `emails`, `email_folders`, `email_attachments`, `graph_subscriptions`
 
 ## Common Issues & Solutions
 
@@ -236,6 +343,27 @@ All methods use config values from `config/services.php`, with optional override
 - Call `Office365Service::refreshAccessToken($connection)` to refresh
 - Update connection model with new tokens after refresh
 
+### Email Sync Not Triggered
+If emails aren't syncing after login:
+1. Check if user already has emails: `User::find($id)->emails()->count()`
+2. Check if user has delta token: `User::find($id)->hasDeltaToken()`
+3. Check if Office365Connection exists and is active
+4. Check queue worker is running: `php artisan queue:listen`
+5. Check logs for job dispatch: `grep "Dispatching initial email sync" storage/logs/laravel.log`
+
+### Duplicate Sync Jobs
+If multiple syncs are triggered:
+- System prevents duplicates with `ShouldBeUnique` (1 hour window)
+- Check if queue is configured correctly
+- Verify cache driver is working (uniqueness uses cache)
+
+### Slow Initial Sync
+If sync takes too long:
+- Check network latency to Microsoft Graph API
+- Verify 7-day filter is applied (reduces email count)
+- Check if queue worker has sufficient memory
+- Consider reducing sync window or using dedicated queue
+
 ## Package Manager
 
 This project uses **pnpm** for both backend and frontend (specified in `package.json` and `frontend/package.json`). Use `pnpm install` and `pnpm run dev` instead of npm where possible.
@@ -247,7 +375,10 @@ This project uses **pnpm** for both backend and frontend (specified in `package.
 ├── app/                    # Laravel application code
 ├── config/                 # Laravel configuration
 ├── database/               # Migrations, seeders, factories
-├── frontend/               # 🆕 Separated Vue 3 SPA frontend
+├── docs/                   # Project documentation
+│   ├── AUTOMATIC_EMAIL_SYNC.md      # Email sync feature guide
+│   └── TESTING_EMAIL_ENDPOINTS.md   # Email endpoint testing
+├── frontend/               # Separated Vue 3 SPA frontend
 │   ├── public/            # Static assets
 │   ├── src/               # Vue source code
 │   │   ├── pages/        # Page components
@@ -387,4 +518,3 @@ Or build a new frontend component:
 ```
 @vue-component-architect Create an EmailComposer component with rich text editing and attachment support.
 ```
-

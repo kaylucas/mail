@@ -26,6 +26,8 @@ class User extends Authenticatable
         'avatar',
         'email_delta_token',
         'last_email_sync_at',
+        'current_sync_job_id',
+        'sync_started_at',
     ];
 
     /**
@@ -48,6 +50,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'last_email_sync_at' => 'datetime',
+            'sync_started_at' => 'datetime',
         ];
     }
 

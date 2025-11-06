@@ -37,6 +37,52 @@ const router = createRouter({
   routes
 })
 
+// Authentication state cache to avoid redundant API calls
+let isAuthenticatedCache = null
+let authCheckPromise = null
+
+// Helper to clear auth state
+export const clearAuthState = () => {
+  isAuthenticatedCache = false
+  authCheckPromise = null
+  localStorage.removeItem('auth_token')
+  delete axios.defaults.headers.common['Authorization']
+}
+
+// Helper to validate token with backend (cached)
+const validateToken = async () => {
+  // If we already have a validation in progress, wait for it
+  if (authCheckPromise) {
+    return authCheckPromise
+  }
+
+  // If we already validated and it's cached, return cached result
+  if (isAuthenticatedCache === true) {
+    return true
+  }
+
+  // Make validation request and cache the promise
+  authCheckPromise = axios.get('/api/user')
+    .then(() => {
+      isAuthenticatedCache = true
+      authCheckPromise = null
+      return true
+    })
+    .catch((error) => {
+      if (error.response?.status === 401) {
+        // Token is invalid
+        clearAuthState()
+      } else {
+        // Network error or server issue - don't cache the failure
+        console.error('Auth validation failed:', error)
+      }
+      authCheckPromise = null
+      return false
+    })
+
+  return authCheckPromise
+}
+
 // Navigation guard for token-based authentication
 router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('auth_token')
@@ -50,41 +96,35 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth) {
     if (!token) {
       // No token, redirect to login
+      isAuthenticatedCache = false
       next({ name: 'Login' })
       return
     }
 
-    try {
-      // Verify token is valid by fetching user
-      await axios.get('/api/user')
+    // Token exists, validate it (uses cache)
+    const isValid = await validateToken()
+
+    if (isValid) {
       next()
-    } catch (error) {
-      if (error.response?.status === 401) {
-        // Token invalid, clear it and redirect to login
-        localStorage.removeItem('auth_token')
-        delete axios.defaults.headers.common['Authorization']
-        next({ name: 'Login' })
-      } else {
-        // Network error or other issue
-        console.error('Auth check failed:', error)
-        next({ name: 'Login' })
-      }
+    } else {
+      // Token validation failed, redirect to login
+      next({ name: 'Login' })
     }
   } else if (to.meta.guest) {
     if (token) {
-      try {
-        // Check if token is still valid
-        await axios.get('/api/user')
+      // Token exists, check if valid (uses cache)
+      const isValid = await validateToken()
+
+      if (isValid) {
         // Token valid, redirect to dashboard
         next({ name: 'Dashboard' })
-      } catch (error) {
-        // Token invalid, clear it and proceed to guest route
-        localStorage.removeItem('auth_token')
-        delete axios.defaults.headers.common['Authorization']
+      } else {
+        // Token invalid, proceed to guest route
         next()
       }
     } else {
       // No token, proceed to guest route
+      isAuthenticatedCache = false
       next()
     }
   } else {
