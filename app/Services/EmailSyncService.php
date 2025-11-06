@@ -55,13 +55,13 @@ class EmailSyncService
             );
 
             foreach ($topLevelFolders as $folderData) {
-                $this->storeFolder($user, $folderData);
+                $this->storeFolder($user, $folderData, $connection->id);
                 $folderIds[] = $folderData['id'];
                 $foldersCount++;
 
                 // Recursively fetch child folders
                 if (isset($folderData['childFolderCount']) && $folderData['childFolderCount'] > 0) {
-                    $childResult = $this->fetchChildFolders($user, $connection->access_token, $folderData['id']);
+                    $childResult = $this->fetchChildFolders($user, $connection->access_token, $folderData['id'], $connection->id);
                     $folderIds = array_merge($folderIds, $childResult['folder_ids']);
                     $foldersCount += $childResult['count'];
                 }
@@ -120,7 +120,7 @@ class EmailSyncService
             $deltaToken = null;
 
             // Start delta query
-            $url = 'https://graph.microsoft.com/v1.0/me/messages/delta?$select=id,subject,body,bodyPreview,from,toRecipients,ccRecipients,bccRecipients,replyTo,sender,receivedDateTime,sentDateTime,hasAttachments,isRead,isDraft,importance,flag,categories,conversationId,internetMessageId,webLink,parentFolderId&$top=100';
+            $url = 'https://graph.microsoft.com/v1.0/me/messages?$top=100&$orderby=receivedDateTime desc';
 
             // Add filter if provided (e.g., last 7 days)
             if ($filter) {
@@ -442,10 +442,19 @@ class EmailSyncService
         $replyTo = $this->parseRecipients($messageData['replyTo'] ?? []);
 
         // Parse from and sender
-        $fromName = $messageData['from']['emailAddress']['name'] ?? null;
-        $fromEmail = $messageData['from']['emailAddress']['address'] ?? null;
-        $senderName = $messageData['sender']['emailAddress']['name'] ?? null;
-        $senderEmail = $messageData['sender']['emailAddress']['address'] ?? null;
+                // Parse from and sender (with length limits for database)
+        $fromName = isset($messageData['from']['emailAddress']['name']) 
+            ? mb_substr($messageData['from']['emailAddress']['name'], 0, 1000) 
+            : null;
+        $fromEmail = isset($messageData['from']['emailAddress']['address']) 
+            ? mb_substr($messageData['from']['emailAddress']['address'], 0, 250) 
+            : null;
+        $senderName = isset($messageData['sender']['emailAddress']['name']) 
+            ? mb_substr($messageData['sender']['emailAddress']['name'], 0, 1000) 
+            : null;
+        $senderEmail = isset($messageData['sender']['emailAddress']['address']) 
+            ? mb_substr($messageData['sender']['emailAddress']['address'], 0, 250) 
+            : null;
 
         // Parse body
         $bodyContentType = isset($messageData['body']['contentType'])
@@ -585,7 +594,7 @@ class EmailSyncService
      * @param string $parentFolderId
      * @return array
      */
-    private function fetchChildFolders(User $user, string $accessToken, string $parentFolderId): array
+    private function fetchChildFolders(User $user, string $accessToken, string $parentFolderId, int $connectionId): array
     {
         $folderIds = [];
         $count = 0;
@@ -596,13 +605,13 @@ class EmailSyncService
         $folders = $this->fetchFoldersPage($accessToken, $url);
 
         foreach ($folders as $folderData) {
-            $this->storeFolder($user, $folderData);
+            $this->storeFolder($user, $folderData, $connectionId);
             $folderIds[] = $folderData['id'];
             $count++;
 
             // Recursively fetch child folders
             if (isset($folderData['childFolderCount']) && $folderData['childFolderCount'] > 0) {
-                $childResult = $this->fetchChildFolders($user, $accessToken, $folderData['id']);
+                $childResult = $this->fetchChildFolders($user, $accessToken, $folderData['id'], $connectionId);
                 $folderIds = array_merge($folderIds, $childResult['folder_ids']);
                 $count += $childResult['count'];
             }
@@ -657,7 +666,7 @@ class EmailSyncService
      * @param array $folderData
      * @return EmailFolder
      */
-    private function storeFolder(User $user, array $folderData): EmailFolder
+    private function storeFolder(User $user, array $folderData, int $connectionId): EmailFolder
     {
         return EmailFolder::updateOrCreate(
             [
@@ -666,6 +675,7 @@ class EmailSyncService
             ],
             [
                 'parent_folder_id' => $folderData['parentFolderId'] ?? null,
+                'office365_connection_id' => $connectionId,
                 'display_name' => $folderData['displayName'] ?? 'Unknown',
                 'total_item_count' => $folderData['totalItemCount'] ?? 0,
                 'unread_item_count' => $folderData['unreadItemCount'] ?? 0,

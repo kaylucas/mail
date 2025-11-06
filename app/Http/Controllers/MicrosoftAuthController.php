@@ -164,26 +164,22 @@ class MicrosoftAuthController extends Controller
             $name = $profile['displayName'];
             $email = $profile['mail'] ?? $profile['userPrincipalName'];
 
-            // Find or create user
-            $user = User::where('microsoft_id', $microsoftId)
-                ->orWhere('email', $email)
-                ->first();
+        // Find or create user by email (primary identifier across all auth providers)
+        $user = User::firstOrCreate(
+            ['email' => $email],  // Find by email only
+            [
+                'name' => $name,
+                'microsoft_id' => $microsoftId,
+            ]
+        );
 
-            if ($user) {
-                // Update existing user
-                $user->update([
-                    'name' => $name,
-                    'email' => $email,
-                    'microsoft_id' => $microsoftId,
-                ]);
-            } else {
-                // Create new user
-                $user = User::create([
-                    'name' => $name,
-                    'email' => $email,
-                    'microsoft_id' => $microsoftId,
-                ]);
-            }
+        // Update microsoft_id and name if user already existed
+        if (!$user->wasRecentlyCreated) {
+            $user->update([
+                'name' => $name,
+                'microsoft_id' => $microsoftId,  // Update Microsoft ID in case it changed
+            ]);
+        }
 
             // Create or update Office365 connection
             $connection = Office365Connection::updateOrCreate(
@@ -215,13 +211,13 @@ class MicrosoftAuthController extends Controller
                 $sevenDaysAgo = now()->subDays(7)->toIso8601String();
                 $filter = "receivedDateTime ge {$sevenDaysAgo}";
 
-                Log::info('Dispatching initial email sync for new user', [
-                    'user_id' => $user->id,
-                    'filter' => $filter,
+//                 Log::info('Dispatching initial email sync for new user', [
+//                     'user_id' => $user->id,
+//                     'filter' => $filter,
                 ]);
 
                 // Dispatch job and capture job UUID
-                $job = \App\Jobs\InitialEmailSyncJob::dispatch($user, $filter);
+                $job = \App\Jobs\InitialEmailSyncJob::dispatch($user, null); // No filter for full initial sync
 
                 // Store job ID for status tracking
                 $user->update([

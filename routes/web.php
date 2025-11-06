@@ -28,6 +28,7 @@ Route::post('/webhooks/microsoft/lifecycle', [WebhookController::class, 'handleL
     ->name('webhooks.microsoft.lifecycle');
 
 // Catch-all route for Vue Router (must be last)
+// Exclude API, webhooks, storage, and other Laravel reserved paths
 Route::get('/{any}', function () {
     return view('app');
-})->where('any', '.*');
+})->where('any', '(?!api|webhooks|storage|sanctum|up).*');
