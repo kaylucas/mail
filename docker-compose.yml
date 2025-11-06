@@ -40,6 +40,13 @@ services:
       SANCTUM_STATEFUL_DOMAINS: localhost:5173,mail.loc,localhost,127.0.0.1
       SESSION_SECURE_COOKIE: false
       CORS_ALLOWED_ORIGINS: http://localhost:5173
+      OFFICE365_TENANT_ID: ${OFFICE365_TENANT_ID}
+      OFFICE365_CLIENT_ID: ${OFFICE365_CLIENT_ID}
+      OFFICE365_CLIENT_SECRET: ${OFFICE365_CLIENT_SECRET}
+      OFFICE365_REDIRECT_URI: ${OFFICE365_REDIRECT_URI}
+      OFFICE365_SCOPES: ${OFFICE365_SCOPES}
+      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL}
+      WEBHOOK_SECRET_KEY: ${WEBHOOK_SECRET_KEY}
     labels:
       - traefik.enable=true
       - traefik.http.routers.mail-local.rule=Host(`mail.loc`)

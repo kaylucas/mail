@@ -5,7 +5,10 @@ const loading = ref(false)
 
 const handleMicrosoftLogin = () => {
   loading.value = true
-  window.location.href = '/auth/microsoft'
+  // Redirect to backend OAuth endpoint (not frontend route)
+  // VITE_API_URL is set in frontend/.env (e.g., http://mail.loc)
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://mail.loc'
+  window.location.href = `${apiUrl}/auth/microsoft`
 }
 </script>
 

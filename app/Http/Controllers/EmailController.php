@@ -32,7 +32,7 @@ class EmailController extends Controller
             ]);
 
             $query = Email::where('user_id', $user->id)
-                ->with(['emailFolder', 'attachments']);
+                ->with(['folder', 'attachments']);
 
             // Apply filters
             if (isset($validated['folder_id'])) {
@@ -103,7 +103,7 @@ class EmailController extends Controller
 
             $email = Email::where('user_id', $user->id)
                 ->where('id', $id)
-                ->with(['emailFolder', 'attachments'])
+                ->with(['folder', 'attachments'])
                 ->first();
 
             if (!$email) {

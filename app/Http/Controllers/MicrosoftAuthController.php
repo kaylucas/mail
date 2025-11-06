@@ -31,15 +31,6 @@ class MicrosoftAuthController extends Controller
             $tenantId = config('services.office365.tenant_id');
             $scopes = 'openid profile email offline_access User.Read Mail.Read';
 
-            Log::info('OAuth redirect initiated', [
-                'session_id' => $request->session()->getId(),
-                'redirect_uri' => $redirectUri,
-                'client_id' => $clientId,
-                'host' => $request->getHost(),
-                'url' => $request->fullUrl(),
-                'has_session_cookie' => $request->hasCookie(config('session.cookie')),
-            ]);
-
             // Create temporary connection object for authorization URL generation
             $tempConnection = new Office365Connection([
                 'client_id' => $clientId,
@@ -59,19 +50,8 @@ class MicrosoftAuthController extends Controller
                 'ip' => $request->ip(),
             ], now()->addMinutes(10));
 
-            Log::info('OAuth state generated and stored in cache', [
-                'state' => $state,
-                'session_id' => $request->session()->getId(),
-                'cache_key' => "oauth_state_{$state}",
-                'ttl_minutes' => 10,
-            ]);
-
             // Generate authorization URL
             $authUrl = $this->service->generateAuthorizationUrl($tempConnection, $state);
-
-            Log::info('Redirecting to Microsoft', [
-                'auth_url' => $authUrl,
-            ]);
 
             return redirect($authUrl);
         } catch (Exception $e) {
