@@ -44,7 +44,9 @@ axios.interceptors.response.use(
     }
 )
 
-// Make axios available globally (optional)
-window.axios = axios
+// Make axios available globally ONLY in development mode (security)
+if (import.meta.env.DEV) {
+    window.axios = axios
+}
 
 export default axios

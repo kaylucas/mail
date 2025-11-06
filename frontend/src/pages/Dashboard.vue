@@ -3,7 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { clearAuthState } from '../router/index.js'
-import { Dialog, DialogPanel, DialogTitle, TransitionRoot, TransitionChild } from '@headlessui/vue'
+import AppLayout from '../layouts/AppLayout.vue'
 import EmailSyncIndicator from '../components/EmailSyncIndicator.vue'
 
 const router = useRouter()
@@ -31,20 +31,6 @@ const fetchUserData = async () => {
     errorMessage.value = 'Failed to load user data'
   } finally {
     loading.value = false
-  }
-}
-
-const handleLogout = async () => {
-  try {
-    await axios.post('/api/logout')
-    // Clear auth state using router helper
-    clearAuthState()
-    router.push({ name: 'Login' })
-  } catch (error) {
-    console.error('Logout failed:', error)
-    // Even if logout fails, clear auth state and redirect
-    clearAuthState()
-    router.push({ name: 'Login' })
   }
 }
 
@@ -82,38 +68,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <!-- Email Sync Status Indicator -->
-    <EmailSyncIndicator />
+  <AppLayout>
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <!-- Email Sync Status Indicator -->
+      <EmailSyncIndicator />
 
-    <!-- Header -->
-    <header class="bg-white shadow-sm border-b">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-4">
-            <h1 class="text-2xl font-bold text-gray-900">{{ user?.name || 'Dashboard' }}</h1>
-          </div>
-          <div class="flex items-center gap-4">
-            <div v-if="user" class="flex items-center gap-3">
-              <img v-if="user.avatar" :src="user.avatar" alt="Avatar" class="w-8 h-8 rounded-full" />
-              <div v-else class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold">
-                {{ user.name?.[0]?.toUpperCase() }}
-              </div>
-              <span class="text-sm text-gray-700">{{ user.email }}</span>
-            </div>
-            <button
-              @click="handleLogout"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Main Content -->
+      <div class="flex-1 overflow-y-auto">
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Loading State -->
       <div v-if="loading" class="flex justify-center items-center py-12">
         <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -233,6 +195,8 @@ onMounted(() => {
           </div>
         </div>
       </div>
-    </main>
-  </div>
+        </main>
+      </div>
+    </div>
+  </AppLayout>
 </template>

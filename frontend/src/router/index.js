@@ -4,6 +4,7 @@ import Login from '../pages/Login.vue'
 import Dashboard from '../pages/Dashboard.vue'
 import AuthCallback from '../pages/AuthCallback.vue'
 import EmailsPage from '../pages/EmailsPage.vue'
+import EmailViewer from '../pages/EmailViewer.vue'
 
 const routes = [
   {
@@ -29,6 +30,12 @@ const routes = [
     name: 'Emails',
     component: EmailsPage,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/emails/:id',
+    name: 'EmailViewer',
+    component: EmailViewer,
+    meta: { requiresAuth: true }
   }
 ]
 
@@ -39,11 +46,16 @@ const router = createRouter({
 
 // Authentication state cache to avoid redundant API calls
 let isAuthenticatedCache = null
+let authCacheExpiry = null
 let authCheckPromise = null
+
+// Auth cache TTL: 5 minutes
+const AUTH_CACHE_TTL = 5 * 60 * 1000
 
 // Helper to clear auth state
 export const clearAuthState = () => {
   isAuthenticatedCache = false
+  authCacheExpiry = null
   authCheckPromise = null
   localStorage.removeItem('auth_token')
   delete axios.defaults.headers.common['Authorization']
@@ -56,7 +68,13 @@ const validateToken = async () => {
     return authCheckPromise
   }
 
-  // If we already validated and it's cached, return cached result
+  // Check if cache has expired
+  if (isAuthenticatedCache === true && authCacheExpiry && Date.now() > authCacheExpiry) {
+    isAuthenticatedCache = null
+    authCacheExpiry = null
+  }
+
+  // If we already validated and it's cached and not expired, return cached result
   if (isAuthenticatedCache === true) {
     return true
   }
@@ -65,6 +83,7 @@ const validateToken = async () => {
   authCheckPromise = axios.get('/api/user')
     .then(() => {
       isAuthenticatedCache = true
+      authCacheExpiry = Date.now() + AUTH_CACHE_TTL
       authCheckPromise = null
       return true
     })
@@ -72,9 +91,6 @@ const validateToken = async () => {
       if (error.response?.status === 401) {
         // Token is invalid
         clearAuthState()
-      } else {
-        // Network error or server issue - don't cache the failure
-        console.error('Auth validation failed:', error)
       }
       authCheckPromise = null
       return false
