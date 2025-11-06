@@ -30,7 +30,7 @@ class EmailFactory extends Factory
             'office365_connection_id' => Office365Connection::factory(),
             'email_folder_id' => EmailFolder::factory(),
             'message_id' => fake()->uuid(),
-            'internet_message_id' => '<' . fake()->uuid() . '@' . fake()->domainName() . '>',
+            'internet_message_id' => '<'.fake()->uuid().'@'.fake()->domainName().'>',
             'conversation_id' => fake()->uuid(),
             'subject' => fake()->sentence(),
             'body_preview' => fake()->text(200),

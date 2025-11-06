@@ -13,12 +13,13 @@ return [
     | authentication cookies. Typically, these should include your local
     | and production domains which access your API via a frontend SPA.
     |
-    | Stateful domains for SPA authentication:
-    | Includes localhost:5173 (local Vite dev server) and mail.loc (Docker backend)
+    | DISABLED: This application uses pure token-based authentication (Bearer tokens)
+    | No stateful domains needed - empty array prevents EnsureFrontendRequestsAreStateful
+    | middleware from applying session-based CSRF validation.
     |
     */
 
-    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', 'localhost:5173,mail.loc,localhost,127.0.0.1')),
+    'stateful' => array_filter(explode(',', env('SANCTUM_STATEFUL_DOMAINS', ''))),
 
     /*
     |--------------------------------------------------------------------------

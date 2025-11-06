@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Debug Tool</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+        .section { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid #4F46E5; }
+        .success { border-left-color: #10B981; }
+        .error { border-left-color: #EF4444; }
+        .warning { border-left-color: #F59E0B; }
+        button { background: #4F46E5; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; margin: 5px; }
+        button:hover { background: #4338CA; }
+        pre { background: #f9fafb; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        h3 { margin-top: 0; color: #1F2937; }
+    </style>
+</head>
+<body>
+    <h1>Authentication Debug Tool</h1>
+    <p>Use this tool to verify your Bearer token authentication setup.</p>
+
+    <div class="section">
+        <h3>Step 1: Check Token in localStorage</h3>
+        <button onclick="checkToken()">Check Token</button>
+        <div id="token-result"></div>
+    </div>
+
+    <div class="section">
+        <h3>Step 2: Test API Request with Token</h3>
+        <button onclick="testApiRequest()">Test /api/user</button>
+        <div id="api-result"></div>
+    </div>
+
+    <div class="section">
+        <h3>Step 3: Verify Request Headers</h3>
+        <button onclick="inspectHeaders()">Inspect Headers</button>
+        <div id="headers-result"></div>
+    </div>
+
+    <script>
+        function checkToken() {
+            const token = localStorage.getItem('auth_token');
+            const resultDiv = document.getElementById('token-result');
+            
+            if (token) {
+                resultDiv.innerHTML = `
+                    <div class="success" style="margin-top: 10px;">
+                        <strong>✅ Token Found</strong>
+                        <pre>Token: ${token.substring(0, 50)}...</pre>
+                        <p>Token length: ${token.length} characters</p>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div class="error" style="margin-top: 10px;">
+                        <strong>❌ No Token Found</strong>
+                        <p>You need to authenticate first. Go to <a href="/#/">Login Page</a></p>
+                    </div>
+                `;
+            }
+        }
+
+        async function testApiRequest() {
+            const resultDiv = document.getElementById('api-result');
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                resultDiv.innerHTML = `
+                    <div class="error" style="margin-top: 10px;">
+                        <strong>❌ No token available</strong>
+                        <p>Please authenticate first.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            resultDiv.innerHTML = '<p>⏳ Testing API request...</p>';
+
+            try {
+                const response = await fetch('/api/user', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success" style="margin-top: 10px;">
+                            <strong>✅ API Request Successful</strong>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                            <p><strong>Status:</strong> ${response.status} ${response.statusText}</p>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error" style="margin-top: 10px;">
+                            <strong>❌ API Request Failed</strong>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                            <p><strong>Status:</strong> ${response.status} ${response.statusText}</p>
+                            ${response.status === 419 ? '<p><strong>⚠️ CSRF Error Detected!</strong> This should NOT happen with Bearer tokens.</p>' : ''}
+                            ${response.status === 401 ? '<p><strong>⚠️ Unauthorized</strong> - Token may be invalid or expired.</p>' : ''}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error" style="margin-top: 10px;">
+                        <strong>❌ Request Failed</strong>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        async function inspectHeaders() {
+            const resultDiv = document.getElementById('headers-result');
+            const token = localStorage.getItem('auth_token');
+            
+            if (!token) {
+                resultDiv.innerHTML = `
+                    <div class="error" style="margin-top: 10px;">
+                        <strong>❌ No token available</strong>
+                    </div>
+                `;
+                return;
+            }
+
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            };
+
+            resultDiv.innerHTML = `
+                <div style="margin-top: 10px;">
+                    <strong>Request Headers (will be sent):</strong>
+                    <pre>${JSON.stringify(headers, null, 2)}</pre>
+                    
+                    <p><strong>✅ Expected Behavior:</strong></p>
+                    <ul>
+                        <li>Authorization header should be present with Bearer token</li>
+                        <li>NO Cookie header should be sent for /api/* routes</li>
+                        <li>NO X-XSRF-TOKEN header should be sent</li>
+                    </ul>
+
+                    <p><strong>⚠️ Open Browser DevTools (F12) → Network Tab</strong></p>
+                    <p>Click "Test /api/user" and inspect the actual request headers in DevTools.</p>
+                </div>
+            `;
+        }
+
+        // Run token check on load
+        window.onload = () => {
+            checkToken();
+        };
+    </script>
+</body>
+</html>

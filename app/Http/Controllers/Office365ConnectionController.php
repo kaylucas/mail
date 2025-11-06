@@ -145,5 +145,4 @@ class Office365ConnectionController extends Controller
             ], 500);
         }
     }
-
 }

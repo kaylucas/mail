@@ -17,29 +17,21 @@ class CreateUserSubscriptionJob implements ShouldQueue
 
     /**
      * The number of times the job may be attempted.
-     *
-     * @var int
      */
     public int $tries = 3;
 
     /**
      * The number of seconds the job can run before timing out.
-     *
-     * @var int
      */
     public int $timeout = 60;
 
     /**
      * The maximum number of unhandled exceptions to allow before failing.
-     *
-     * @var int
      */
     public int $maxExceptions = 3;
 
     /**
      * The user to create subscription for.
-     *
-     * @var User
      */
     protected User $user;
 
@@ -60,22 +52,23 @@ class CreateUserSubscriptionJob implements ShouldQueue
             Log::info('CreateUserSubscriptionJob started', [
                 'user_id' => $this->user->id,
                 'job_uuid' => $this->job->uuid(),
-                'attempt' => $this->attempts()
+                'attempt' => $this->attempts(),
             ]);
 
             // Check if user already has active subscription (idempotent)
             if ($this->user->activeEmailSubscription) {
                 Log::warning('User already has active email subscription, skipping', [
                     'user_id' => $this->user->id,
-                    'subscription_id' => $this->user->activeEmailSubscription->subscription_id
+                    'subscription_id' => $this->user->activeEmailSubscription->subscription_id,
                 ]);
+
                 return;
             }
 
             // Prepare subscription options
             $options = [
                 'resource' => 'me/messages',
-                'changeTypes' => ['created', 'updated', 'deleted']
+                'changeTypes' => ['created', 'updated', 'deleted'],
             ];
 
             // Create subscription
@@ -85,7 +78,7 @@ class CreateUserSubscriptionJob implements ShouldQueue
                 'user_id' => $this->user->id,
                 'job_uuid' => $this->job->uuid(),
                 'subscription_id' => $subscription->subscription_id,
-                'expires_at' => $subscription->expires_at
+                'expires_at' => $subscription->expires_at,
             ]);
         } catch (\Exception $e) {
             Log::error('CreateUserSubscriptionJob failed', [
@@ -93,7 +86,7 @@ class CreateUserSubscriptionJob implements ShouldQueue
                 'job_uuid' => $this->job->uuid(),
                 'attempt' => $this->attempts(),
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Re-throw to trigger retry
@@ -109,7 +102,7 @@ class CreateUserSubscriptionJob implements ShouldQueue
         Log::critical('CreateUserSubscriptionJob failed permanently', [
             'user_id' => $this->user->id,
             'error' => $exception->getMessage(),
-            'trace' => $exception->getTraceAsString()
+            'trace' => $exception->getTraceAsString(),
         ]);
 
         // Note: User can manually create subscription via API endpoint later

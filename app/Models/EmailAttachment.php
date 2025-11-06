@@ -72,7 +72,7 @@ class EmailAttachment extends Model
      */
     public function scopeByType($query, $contentType)
     {
-        return $query->where('content_type', 'like', '%' . $contentType . '%');
+        return $query->where('content_type', 'like', '%'.$contentType.'%');
     }
 
     /**
@@ -120,6 +120,6 @@ class EmailAttachment extends Model
             $bytes /= 1024;
         }
 
-        return round($bytes, 2) . ' ' . $units[$i];
+        return round($bytes, 2).' '.$units[$i];
     }
 }

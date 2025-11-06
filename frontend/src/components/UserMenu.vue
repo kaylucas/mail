@@ -42,16 +42,16 @@
             </button>
           </MenuItem>
 
-          <MenuItem v-slot="{ active }" disabled>
+          <MenuItem v-slot="{ active }">
             <button
+              @click="navigateToSettings"
               :class="[
-                'w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-not-allowed transition-colors',
-                active ? 'bg-gray-50' : ''
+                'w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                active ? 'bg-gray-50 text-gray-900' : 'text-gray-700'
               ]"
             >
               <Cog6ToothIcon class="h-5 w-5" />
               <span>Settings</span>
-              <span class="ml-auto text-xs bg-gray-100 px-2 py-0.5 rounded-full">Soon</span>
             </button>
           </MenuItem>
 
@@ -143,6 +143,11 @@ const avatarColor = computed(() => {
 
   return colors[Math.abs(hash) % colors.length]
 })
+
+// Navigate to settings
+const navigateToSettings = () => {
+  router.push({ name: 'Settings' })
+}
 
 // Handle logout
 const handleLogout = async () => {

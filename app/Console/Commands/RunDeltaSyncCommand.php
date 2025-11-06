@@ -42,6 +42,7 @@ class RunDeltaSyncCommand extends Command
 
             if ($users->isEmpty()) {
                 $this->error("User not found or doesn't have active connection with delta token");
+
                 return self::FAILURE;
             }
         } elseif ($this->option('all')) {
@@ -52,11 +53,13 @@ class RunDeltaSyncCommand extends Command
                 ->get();
         } else {
             $this->error('Please specify --user=ID or --all');
+
             return self::FAILURE;
         }
 
         if ($users->isEmpty()) {
             $this->warn('No users found for delta sync');
+
             return self::SUCCESS;
         }
 

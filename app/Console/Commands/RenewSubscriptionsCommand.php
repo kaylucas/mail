@@ -49,6 +49,7 @@ class RenewSubscriptionsCommand extends Command
 
         if ($subscriptions->isEmpty()) {
             $this->info('No subscriptions need renewal');
+
             return self::SUCCESS;
         }
 
@@ -59,15 +60,17 @@ class RenewSubscriptionsCommand extends Command
         foreach ($subscriptions as $subscription) {
             $user = $subscription->user;
 
-            if (!$user) {
+            if (! $user) {
                 $this->error("→ Subscription {$subscription->subscription_id}: User not found");
                 $failed++;
+
                 continue;
             }
 
-            if (!$user->office365Connection || !$user->office365Connection->is_active) {
+            if (! $user->office365Connection || ! $user->office365Connection->is_active) {
                 $this->error("→ User {$user->id}: No active Office365 connection");
                 $failed++;
+
                 continue;
             }
 
@@ -85,7 +88,7 @@ class RenewSubscriptionsCommand extends Command
         }
 
         $this->newLine();
-        $this->info("Renewal completed:");
+        $this->info('Renewal completed:');
         $this->line("  Renewed: {$renewed}");
         $this->line("  Failed:  {$failed}");
         $this->line("  Total:   {$subscriptions->count()}");

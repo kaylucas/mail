@@ -5,6 +5,7 @@ import Dashboard from '../pages/Dashboard.vue'
 import AuthCallback from '../pages/AuthCallback.vue'
 import EmailsPage from '../pages/EmailsPage.vue'
 import EmailViewer from '../pages/EmailViewer.vue'
+import Settings from '../pages/Settings.vue'
 
 const routes = [
   {
@@ -35,6 +36,12 @@ const routes = [
     path: '/emails/:id',
     name: 'EmailViewer',
     component: EmailViewer,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: Settings,
     meta: { requiresAuth: true }
   }
 ]

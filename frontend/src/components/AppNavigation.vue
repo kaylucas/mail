@@ -271,14 +271,19 @@ const SidebarContent = defineComponent({
           )
         ]),
 
-        // Settings (placeholder)
+
+        // Settings link (now enabled)
         h('button', {
-          disabled: true,
-          class: 'w-full flex items-center gap-3 px-3 py-2 mt-6 text-sm font-medium text-gray-400 rounded-lg cursor-not-allowed opacity-50 border-l-4 border-transparent'
+          onClick: () => navigateTo('Settings'),
+          class: [
+            'w-full flex items-center gap-3 px-3 py-2 mt-6 text-sm font-medium rounded-lg transition-all duration-150 border-l-4',
+            isActiveRoute('Settings')
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-600 pl-2.5 shadow-sm'
+              : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-transparent'
+          ]
         }, [
           h(Cog6ToothIcon, { class: 'h-5 w-5 flex-shrink-0' }),
-          h('span', 'Settings'),
-          h('span', { class: 'ml-auto text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full' }, 'Soon')
+          h('span', 'Settings')
         ])
       ]),
 

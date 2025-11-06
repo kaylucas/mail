@@ -55,13 +55,19 @@ class EmailSyncController extends Controller
             }
 
             // Dispatch job and get job ID
-            $jobId = app(\Illuminate\Contracts\Bus\Dispatcher::class)->dispatch(
-                new InitialEmailSyncJob($user)
-            );
+            $job = new InitialEmailSyncJob($user);
+            $jobId = app(\Illuminate\Contracts\Bus\Dispatcher::class)->dispatch($job);
+
+            // Store job ID and sync started timestamp on user
+            $user->update([
+                'current_sync_job_id' => $jobId,
+                'sync_started_at' => now(),
+            ]);
 
             Log::info('Initial sync job dispatched', [
                 'user_id' => $user->id,
                 'job_id' => $jobId,
+                'sync_started_at' => $user->sync_started_at,
             ]);
 
             return response()->json([

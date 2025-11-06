@@ -25,7 +25,7 @@ class GraphSubscriptionService
         try {
             // Get user's Office365Connection
             $connection = $user->office365Connection;
-            if (!$connection || !$connection->is_active) {
+            if (! $connection || ! $connection->is_active) {
                 throw new Exception('No active Office365 connection found for user');
             }
 
@@ -51,15 +51,15 @@ class GraphSubscriptionService
             $webhookBaseUrl = config('services.microsoft_graph.webhook_base_url');
             $notificationUrlPath = config('services.microsoft_graph.notification_url_path');
 
-            if (empty($webhookBaseUrl) || !is_string($webhookBaseUrl)) {
+            if (empty($webhookBaseUrl) || ! is_string($webhookBaseUrl)) {
                 throw new Exception('Webhook base URL is not configured or invalid. Set services.microsoft_graph.webhook_base_url in config.');
             }
 
-            if (empty($notificationUrlPath) || !is_string($notificationUrlPath)) {
+            if (empty($notificationUrlPath) || ! is_string($notificationUrlPath)) {
                 throw new Exception('Notification URL path is not configured or invalid. Set services.microsoft_graph.notification_url_path in config.');
             }
 
-            $notificationUrl = rtrim($webhookBaseUrl, '/') . '/' . ltrim($notificationUrlPath, '/');
+            $notificationUrl = rtrim($webhookBaseUrl, '/').'/'.ltrim($notificationUrlPath, '/');
 
             // Calculate expiration
             $expiresAt = now()->addMinutes($expirationMinutes);
@@ -134,7 +134,7 @@ class GraphSubscriptionService
 
             // Get Office365Connection
             $connection = $subscription->office365Connection;
-            if (!$connection) {
+            if (! $connection) {
                 throw new Exception('Office365 connection not found for subscription');
             }
 
@@ -245,10 +245,11 @@ class GraphSubscriptionService
     {
         $subscription = GraphSubscription::where('subscription_id', $subscriptionId)->first();
 
-        if (!$subscription) {
+        if (! $subscription) {
             Log::warning('Subscription not found for clientState validation', [
                 'subscription_id' => $subscriptionId,
             ]);
+
             return false;
         }
 
@@ -276,14 +277,14 @@ class GraphSubscriptionService
     {
         $subscription = GraphSubscription::where('subscription_id', $subscriptionId)->first();
 
-        if (!$subscription) {
+        if (! $subscription) {
             throw new Exception("Subscription not found: {$subscriptionId}");
         }
 
         $subscription->load('office365Connection');
         $connection = $subscription->office365Connection;
 
-        if (!$connection) {
+        if (! $connection) {
             throw new Exception("Office365 connection not found for subscription: {$subscriptionId}");
         }
 

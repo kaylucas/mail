@@ -6,13 +6,12 @@ use App\Models\Office365Connection;
 use Exception;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Microsoft\Graph\GraphServiceClient;
+use League\OAuth2\Client\Token\AccessToken;
 use Microsoft\Graph\Core\Authentication\GraphPhpLeagueAccessTokenProvider;
 use Microsoft\Graph\Core\Authentication\GraphPhpLeagueAuthenticationProvider;
-use Microsoft\Kiota\Authentication\Cache\InMemoryAccessTokenCache;
+use Microsoft\Graph\GraphServiceClient;
 use Microsoft\Kiota\Abstractions\ApiException;
-use League\OAuth2\Client\Token\AccessToken;
-use League\OAuth2\Client\Grant\AuthorizationCode;
+use Microsoft\Kiota\Authentication\Cache\InMemoryAccessTokenCache;
 use Microsoft\Kiota\Authentication\Oauth\AuthorizationCodeContext;
 
 class Office365Service
@@ -28,21 +27,23 @@ class Office365Service
             $parts = explode('.', $token);
             if (count($parts) !== 3) {
                 Log::warning('Token is not a valid JWT format', [
-                    'token_preview' => substr($token, 0, 20) . '...',
+                    'token_preview' => substr($token, 0, 20).'...',
                 ]);
+
                 return;
             }
 
             // Decode payload (base64url decode)
             $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
 
-            if (!$payload) {
+            if (! $payload) {
                 Log::warning('Unable to decode token payload');
+
                 return;
             }
 
             // Check for ID token indicators
-            if (isset($payload['aud']) && !isset($payload['scp'])) {
+            if (isset($payload['aud']) && ! isset($payload['scp'])) {
                 Log::error('Token appears to be an ID token (has aud, missing scp claim)', [
                     'aud' => $payload['aud'],
                     'has_roles' => isset($payload['roles']),
@@ -77,6 +78,7 @@ class Office365Service
         if (is_string($raw)) {
             $raw = preg_split('/[\s,]+/', trim($raw), -1, PREG_SPLIT_NO_EMPTY);
         }
+
         return implode(' ', $raw);
     }
 
@@ -91,6 +93,7 @@ class Office365Service
         if (is_string($raw)) {
             return preg_split('/[\s,]+/', trim($raw), -1, PREG_SPLIT_NO_EMPTY);
         }
+
         return $raw;
     }
 
@@ -213,16 +216,6 @@ class Office365Service
 
     /**
      * Create a Graph client with proper TokenRequestContext, cache, and provider wiring.
-     *
-     * @param string $tenantId
-     * @param string $clientId
-     * @param string $clientSecret
-     * @param string $redirectUri
-     * @param string $accessTokenValue
-     * @param string|null $refreshTokenValue
-     * @param int|null $expiresIn
-     * @param array $scopes
-     * @return GraphServiceClient
      */
     private function createGraphClient(
         string $tenantId,
@@ -311,12 +304,12 @@ class Office365Service
     /**
      * Get user profile from Microsoft Graph API.
      *
-     * @param string $accessToken The OAuth access token (not ID token)
-     * @param string $tenantId Tenant ID for the OAuth context
-     * @param string $clientId Client ID for the OAuth context
-     * @param string $clientSecret Client secret for the OAuth context
-     * @param string $redirectUri Redirect URI for the OAuth context
-     * @param string|array|null $scopes Scopes for the token
+     * @param  string  $accessToken  The OAuth access token (not ID token)
+     * @param  string  $tenantId  Tenant ID for the OAuth context
+     * @param  string  $clientId  Client ID for the OAuth context
+     * @param  string  $clientSecret  Client secret for the OAuth context
+     * @param  string  $redirectUri  Redirect URI for the OAuth context
+     * @param  string|array|null  $scopes  Scopes for the token
      */
     public function getUserProfile(
         string $accessToken,
@@ -447,7 +440,7 @@ class Office365Service
                 ]);
 
                 throw new Exception(
-                    'Failed to create Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+                    'Failed to create Graph subscription: '.($errorData['error']['message'] ?? 'Unknown error')
                 );
             }
 
@@ -533,7 +526,7 @@ class Office365Service
                 ]);
 
                 throw new Exception(
-                    'Failed to renew Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+                    'Failed to renew Graph subscription: '.($errorData['error']['message'] ?? 'Unknown error')
                 );
             }
 
@@ -599,6 +592,7 @@ class Office365Service
                 Log::info('Successfully deleted Microsoft Graph subscription', [
                     'subscription_id' => $subscriptionId,
                 ]);
+
                 return true;
             }
 
@@ -606,6 +600,7 @@ class Office365Service
                 Log::warning('Microsoft Graph subscription already deleted or not found', [
                     'subscription_id' => $subscriptionId,
                 ]);
+
                 return true;
             }
 
@@ -618,7 +613,7 @@ class Office365Service
             ]);
 
             throw new Exception(
-                'Failed to delete Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error')
+                'Failed to delete Graph subscription: '.($errorData['error']['message'] ?? 'Unknown error')
             );
         } catch (Exception $e) {
             Log::error('Exception while deleting Microsoft Graph subscription', [
@@ -691,7 +686,7 @@ class Office365Service
                 ]);
 
                 throw new Exception(
-                    'Failed to fetch Graph subscription: ' . ($errorData['error']['message'] ?? 'Unknown error'),
+                    'Failed to fetch Graph subscription: '.($errorData['error']['message'] ?? 'Unknown error'),
                     $response->status()
                 );
             }
@@ -707,5 +702,4 @@ class Office365Service
             throw $e;
         }
     }
-
 }

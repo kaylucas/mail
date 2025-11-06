@@ -32,6 +32,7 @@ class ValidateWebhookSignature
                     'path' => $request->path(),
                     'ip' => $request->ip(),
                 ]);
+
                 return $next($request);
             }
 
@@ -41,6 +42,7 @@ class ValidateWebhookSignature
                     'path' => $request->path(),
                     'ip' => $request->ip(),
                 ]);
+
                 return $next($request);
             }
 
@@ -57,13 +59,14 @@ class ValidateWebhookSignature
             $data = $request->json()->all();
 
             // Check if payload has the expected structure
-            if (!isset($data['value']) || !is_array($data['value']) || empty($data['value'])) {
+            if (! isset($data['value']) || ! is_array($data['value']) || empty($data['value'])) {
                 Log::warning('Webhook middleware: Invalid payload structure', [
                     'path' => $request->path(),
                     'ip' => $request->ip(),
                     'has_value' => isset($data['value']),
                     'is_array' => isset($data['value']) && is_array($data['value']),
                 ]);
+
                 // Continue anyway - controller will handle invalid payloads
                 return $next($request);
             }
@@ -73,24 +76,26 @@ class ValidateWebhookSignature
                 $subscriptionId = $notification['subscriptionId'] ?? null;
                 $clientState = $notification['clientState'] ?? null;
 
-                if (!$subscriptionId || !$clientState) {
+                if (! $subscriptionId || ! $clientState) {
                     Log::warning('Webhook middleware: Notification missing required fields', [
                         'index' => $index,
                         'subscription_id' => $subscriptionId,
-                        'has_client_state' => !empty($clientState),
+                        'has_client_state' => ! empty($clientState),
                         'ip' => $request->ip(),
                     ]);
+
                     continue;
                 }
 
                 // Find subscription
                 $subscription = GraphSubscription::where('subscription_id', $subscriptionId)->first();
 
-                if (!$subscription) {
+                if (! $subscription) {
                     Log::warning('Webhook middleware: Subscription not found', [
                         'subscription_id' => $subscriptionId,
                         'ip' => $request->ip(),
                     ]);
+
                     continue;
                 }
 
@@ -98,12 +103,13 @@ class ValidateWebhookSignature
                 if ($subscription->client_state !== $clientState) {
                     Log::error('Webhook middleware: SECURITY ALERT - clientState mismatch', [
                         'subscription_id' => $subscriptionId,
-                        'expected_state' => substr($subscription->client_state ?? '', 0, 10) . '...',
-                        'received_state' => substr($clientState, 0, 10) . '...',
+                        'expected_state' => substr($subscription->client_state ?? '', 0, 10).'...',
+                        'received_state' => substr($clientState, 0, 10).'...',
                         'ip' => $request->ip(),
                         'user_agent' => $request->userAgent(),
                         'user_id' => $subscription->user_id,
                     ]);
+
                     // Continue anyway - controller will handle validation
                     // Microsoft recommends not blocking to avoid retry issues
                     continue;

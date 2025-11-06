@@ -37,7 +37,8 @@ services:
       APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: ${APP_DEBUG:-true}
       APP_URL: http://mail.loc
-      SANCTUM_STATEFUL_DOMAINS: localhost:5173,mail.loc,localhost,127.0.0.1
+      # SANCTUM_STATEFUL_DOMAINS: Disabled for token-based authentication (no stateful domains needed)
+      SANCTUM_STATEFUL_DOMAINS: ""
       SESSION_SECURE_COOKIE: false
       CORS_ALLOWED_ORIGINS: http://localhost:5173
       OFFICE365_TENANT_ID: ${OFFICE365_TENANT_ID}
@@ -54,6 +55,46 @@ services:
     networks:
       - default
       - proxy
+
+  queue:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      app:
+        condition: service_started
+    tmpfs:
+      - /var/www/html/storage/framework/cache:uid=33,gid=33
+      - /var/www/html/storage/framework/sessions:uid=33,gid=33
+      - /var/www/html/storage/framework/views:uid=33,gid=33
+      - /var/www/html/bootstrap/cache:uid=33,gid=33
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      APP_KEY: ${APP_KEY}
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_URL: http://mail.loc
+      SANCTUM_STATEFUL_DOMAINS: ""
+      SESSION_SECURE_COOKIE: false
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      OFFICE365_TENANT_ID: ${OFFICE365_TENANT_ID}
+      OFFICE365_CLIENT_ID: ${OFFICE365_CLIENT_ID}
+      OFFICE365_CLIENT_SECRET: ${OFFICE365_CLIENT_SECRET}
+      OFFICE365_REDIRECT_URI: ${OFFICE365_REDIRECT_URI}
+      OFFICE365_SCOPES: ${OFFICE365_SCOPES}
+      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL}
+      WEBHOOK_SECRET_KEY: ${WEBHOOK_SECRET_KEY}
+    command: php artisan queue:listen --timeout=600 --memory=512 --sleep=3 --tries=3
+    restart: unless-stopped
+    networks:
+      - default
 
 volumes:
   mariadb_data:

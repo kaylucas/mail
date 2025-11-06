@@ -99,7 +99,7 @@ test('authenticated users can list their emails', function () {
                     'has_attachments',
                     'folder',
                     'attachments',
-                ]
+                ],
             ],
             'links',
             'current_page',
@@ -520,7 +520,7 @@ test('authenticated users can retrieve a single email', function () {
                 'has_attachments',
                 'folder',
                 'attachments',
-            ]
+            ],
         ]);
 
     expect($response->json('data.id'))->toBe($email->id)
@@ -569,7 +569,7 @@ test('authenticated users can mark email as read', function () {
     expect($email->is_read)->toBeFalse();
 
     $response = $this->patchJson("/api/emails/{$email->id}/read", [
-        'is_read' => true
+        'is_read' => true,
     ]);
 
     $response->assertStatus(200)
@@ -578,7 +578,7 @@ test('authenticated users can mark email as read', function () {
             'data' => [
                 'id' => $email->id,
                 'is_read' => true,
-            ]
+            ],
         ]);
 
     $email->refresh();
@@ -597,7 +597,7 @@ test('authenticated users can mark email as unread', function () {
     expect($email->is_read)->toBeTrue();
 
     $response = $this->patchJson("/api/emails/{$email->id}/read", [
-        'is_read' => false
+        'is_read' => false,
     ]);
 
     $response->assertStatus(200)
@@ -606,7 +606,7 @@ test('authenticated users can mark email as unread', function () {
             'data' => [
                 'id' => $email->id,
                 'is_read' => false,
-            ]
+            ],
         ]);
 
     $email->refresh();
@@ -637,7 +637,7 @@ test('update read status validates is_read must be boolean', function () {
         ->create();
 
     $response = $this->patchJson("/api/emails/{$email->id}/read", [
-        'is_read' => 'not-a-boolean'
+        'is_read' => 'not-a-boolean',
     ]);
 
     // Controller catches validation exceptions and returns 500
@@ -656,7 +656,7 @@ test('users cannot update read status of another users email', function () {
         ->create();
 
     $response = $this->patchJson("/api/emails/{$otherEmail->id}/read", [
-        'is_read' => true
+        'is_read' => true,
     ]);
 
     $response->assertStatus(404)
@@ -665,7 +665,7 @@ test('users cannot update read status of another users email', function () {
 
 test('update read status returns 404 for non-existent email', function () {
     $response = $this->patchJson('/api/emails/99999/read', [
-        'is_read' => true
+        'is_read' => true,
     ]);
 
     $response->assertStatus(404)
@@ -698,8 +698,8 @@ test('authenticated users can list their email folders', function () {
                     'unread_item_count',
                     'child_folder_count',
                     'is_hidden',
-                ]
-            ]
+                ],
+            ],
         ]);
 
     expect($response->json('data'))->toHaveCount(3);
@@ -791,7 +791,7 @@ test('authenticated users can retrieve email statistics', function () {
                 'emails_with_attachments',
                 'last_sync_at',
                 'has_active_subscription',
-            ]
+            ],
         ]);
 
     expect($response->json('data.total_emails'))->toBe(5)

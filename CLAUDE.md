@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Laravel 12 application with a **separated Vue 3 SPA frontend** that implements Microsoft Office 365 OAuth authentication and email integration. The frontend runs independently from the Laravel backend and communicates via API. The application uses Laravel Sanctum for stateful SPA authentication with session-based CSRF protection.
+This is a Laravel 12 application with a **separated Vue 3 SPA frontend** that implements Microsoft Office 365 OAuth authentication and email integration. The frontend runs independently from the Laravel backend and communicates via API. The application uses Laravel Sanctum for **pure token-based API authentication** with Bearer tokens (no cookies, no CSRF protection needed).
 
 **Architecture:**
 - **Backend**: Laravel 12 API at `http://mail.loc` (Docker + Traefik)
@@ -98,7 +98,9 @@ php artisan migrate:rollback     # Rollback last migration
 - All API requests include `Authorization: Bearer {token}` header
 - `CORS_ALLOWED_ORIGINS` must include `http://localhost:5173` for frontend access
 - Tokens can be revoked via `/api/logout` endpoint
-- No cookies or CSRF protection needed with token-based auth
+- **IMPORTANT**: No cookies or CSRF protection needed - application uses pure token-based auth
+- **statefulApi() is NOT used** in bootstrap/app.php to avoid mixing stateful and token-based auth
+- **Sanctum stateful domains DISABLED** in config/sanctum.php (`'stateful' => []`) to prevent EnsureFrontendRequestsAreStateful middleware from applying session-based CSRF validation
 
 **Security Improvements (2025-11-06):**
 - SQL injection protection: Job IDs validated before database queries

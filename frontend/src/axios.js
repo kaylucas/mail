@@ -10,11 +10,29 @@ axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest'
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/'
 axios.defaults.baseURL = API_BASE_URL
 
+// CRITICAL: Disable CSRF for token-based authentication
+// Token-based auth (Bearer tokens) is inherently CSRF-safe and does not require CSRF tokens
+axios.defaults.withCredentials = false
+axios.defaults.withXSRFToken = false
+
 // Set auth token from localStorage if available on initial load
 const token = localStorage.getItem('auth_token')
 if (token) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
 }
+
+// Add request interceptor to ensure token is always fresh from localStorage
+// This handles cases where token is updated after initial axios configuration
+axios.interceptors.request.use(
+    config => {
+        const currentToken = localStorage.getItem('auth_token')
+        if (currentToken) {
+            config.headers.Authorization = `Bearer ${currentToken}`
+        }
+        return config
+    },
+    error => Promise.reject(error)
+)
 
 // Add response interceptor to handle authentication errors
 axios.interceptors.response.use(

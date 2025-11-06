@@ -73,7 +73,7 @@ class EmailAttachmentFactory extends Factory
     public function pdf(): static
     {
         return $this->state(fn (array $attributes) => [
-            'name' => fake()->word() . '.pdf',
+            'name' => fake()->word().'.pdf',
             'content_type' => 'application/pdf',
             'size' => fake()->numberBetween(10000, 5000000),
         ]);
@@ -92,7 +92,7 @@ class EmailAttachmentFactory extends Factory
         };
 
         return $this->state(fn (array $attributes) => [
-            'name' => fake()->word() . '.' . $extension,
+            'name' => fake()->word().'.'.$extension,
             'content_type' => $mimeType,
             'size' => fake()->numberBetween(50000, 3000000),
         ]);
@@ -104,7 +104,7 @@ class EmailAttachmentFactory extends Factory
     public function word(): static
     {
         return $this->state(fn (array $attributes) => [
-            'name' => fake()->word() . '.docx',
+            'name' => fake()->word().'.docx',
             'content_type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'size' => fake()->numberBetween(15000, 1000000),
         ]);
@@ -116,7 +116,7 @@ class EmailAttachmentFactory extends Factory
     public function excel(): static
     {
         return $this->state(fn (array $attributes) => [
-            'name' => fake()->word() . '.xlsx',
+            'name' => fake()->word().'.xlsx',
             'content_type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'size' => fake()->numberBetween(20000, 2000000),
         ]);

@@ -113,7 +113,7 @@ class SubscriptionController extends Controller
             // Find active subscription
             $subscription = $user->activeEmailSubscription;
 
-            if (!$subscription) {
+            if (! $subscription) {
                 return response()->json([
                     'message' => 'No active subscription found',
                 ], 404);
@@ -175,14 +175,14 @@ class SubscriptionController extends Controller
             // Find active subscription
             $subscription = $user->activeEmailSubscription;
 
-            if (!$subscription) {
+            if (! $subscription) {
                 return response()->json([
                     'message' => 'No active subscription found to renew',
                 ], 404);
             }
 
             // Check if subscription needs renewal
-            if (!$subscription->isExpiringSoon(24)) {
+            if (! $subscription->isExpiringSoon(24)) {
                 return response()->json([
                     'message' => "Subscription does not need renewal yet. Expires at: {$subscription->expires_at->toIso8601String()}",
                     'subscription' => [
@@ -237,7 +237,7 @@ class SubscriptionController extends Controller
             // Find any subscription (active or expired)
             $subscription = $user->graphSubscriptions()->latest()->first();
 
-            if (!$subscription) {
+            if (! $subscription) {
                 return response()->json([
                     'message' => 'No subscription found',
                 ], 404);

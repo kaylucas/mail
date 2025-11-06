@@ -118,7 +118,7 @@ class GraphSubscription extends Model
      */
     public function isExpired(): bool
     {
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return true;
         }
 
@@ -130,7 +130,7 @@ class GraphSubscription extends Model
      */
     public function isExpiringSoon(int $hours = 24): bool
     {
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return true;
         }
 
@@ -143,7 +143,7 @@ class GraphSubscription extends Model
      */
     public function needsRenewal(int $thresholdHours = 12): bool
     {
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return true;
         }
 
@@ -200,7 +200,7 @@ class GraphSubscription extends Model
      */
     public function getTimeUntilExpiration(): CarbonInterval
     {
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return CarbonInterval::seconds(0);
         }
 

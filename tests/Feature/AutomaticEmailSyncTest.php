@@ -9,7 +9,6 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
@@ -80,8 +79,8 @@ test('existing user with emails does not trigger automatic sync', function () {
     // Since user HAS emails, this condition is false, so no job dispatch
 
     // Simulate dispatch attempt - should not happen
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
-        InitialEmailSyncJob::dispatch($user, "receivedDateTime ge " . now()->subDays(7)->toIso8601String());
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
+        InitialEmailSyncJob::dispatch($user, 'receivedDateTime ge '.now()->subDays(7)->toIso8601String());
     }
 
     // Should NOT dispatch InitialEmailSyncJob
@@ -105,8 +104,8 @@ test('user with delta token but no emails does not trigger sync', function () {
     // Since user HAS delta token, this condition is false, so no job dispatch
 
     // Simulate dispatch attempt - should not happen
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
-        InitialEmailSyncJob::dispatch($user, "receivedDateTime ge " . now()->subDays(7)->toIso8601String());
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
+        InitialEmailSyncJob::dispatch($user, 'receivedDateTime ge '.now()->subDays(7)->toIso8601String());
     }
 
     // Should NOT dispatch InitialEmailSyncJob (has delta token)
@@ -130,7 +129,7 @@ test('new user without delta token and without emails triggers sync', function (
     // Both conditions are true, so job SHOULD be dispatched
 
     // Simulate dispatch (what the controller does)
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
         $sevenDaysAgo = now()->subDays(7)->toIso8601String();
         $filter = "receivedDateTime ge {$sevenDaysAgo}";
         InitialEmailSyncJob::dispatch($user, $filter);
@@ -303,7 +302,7 @@ test('EmailSyncService initialSync accepts optional filter parameter', function 
     ]);
 
     // Call initialSync with filter
-    $filter = "receivedDateTime ge " . now()->subDays(7)->toIso8601String();
+    $filter = 'receivedDateTime ge '.now()->subDays(7)->toIso8601String();
     $emailSyncService = app(EmailSyncService::class);
 
     $result = $emailSyncService->initialSync($user, $filter);
@@ -314,7 +313,7 @@ test('EmailSyncService initialSync accepts optional filter parameter', function 
 
     // Verify HTTP request included filter
     Http::assertSent(function ($request) use ($filter) {
-        return str_contains($request->url(), '$filter=' . urlencode($filter));
+        return str_contains($request->url(), '$filter='.urlencode($filter));
     });
 });
 
@@ -332,7 +331,7 @@ test('filter parameter is correctly URL encoded in Graph API request', function 
     ]);
 
     // Filter with special characters that need encoding
-    $dateTime = "2025-10-30T12:00:00+00:00";
+    $dateTime = '2025-10-30T12:00:00+00:00';
     $filter = "receivedDateTime ge {$dateTime}";
 
     $emailSyncService = app(EmailSyncService::class);
@@ -345,7 +344,7 @@ test('filter parameter is correctly URL encoded in Graph API request', function 
         // Check that the filter is URL-encoded (spaces become %20, + becomes %2B, etc.)
         $encodedFilter = urlencode($filter);
 
-        return str_contains($url, '$filter=' . $encodedFilter);
+        return str_contains($url, '$filter='.$encodedFilter);
     });
 });
 
@@ -380,7 +379,7 @@ test('InitialEmailSyncJob stores filter in job properties', function () {
     $connection = Office365Connection::factory()->for($user)->create();
 
     // Dispatch job with filter
-    $filter = "receivedDateTime ge " . now()->subDays(7)->toIso8601String();
+    $filter = 'receivedDateTime ge '.now()->subDays(7)->toIso8601String();
     InitialEmailSyncJob::dispatch($user, $filter);
 
     // Verify job was dispatched with filter
@@ -408,8 +407,8 @@ test('multiple login attempts do not cause duplicate sync jobs', function () {
     Office365Connection::factory()->for($user)->create();
 
     // First login - triggers sync
-    $filter = "receivedDateTime ge " . now()->subDays(7)->toIso8601String();
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
+    $filter = 'receivedDateTime ge '.now()->subDays(7)->toIso8601String();
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
         InitialEmailSyncJob::dispatch($user, $filter);
     }
 
@@ -420,7 +419,7 @@ test('multiple login attempts do not cause duplicate sync jobs', function () {
     $user->update(['email_delta_token' => 'delta-token-123']);
 
     // Second login attempt - should NOT trigger sync (has delta token now)
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
         InitialEmailSyncJob::dispatch($user, $filter);
     }
 
@@ -436,8 +435,8 @@ test('sync job CAN be dispatched multiple times if sync not yet completed', func
     Office365Connection::factory()->for($user)->create();
 
     // First login - dispatch job
-    $filter = "receivedDateTime ge " . now()->subDays(7)->toIso8601String();
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
+    $filter = 'receivedDateTime ge '.now()->subDays(7)->toIso8601String();
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
         InitialEmailSyncJob::dispatch($user, $filter);
     }
 
@@ -450,7 +449,7 @@ test('sync job CAN be dispatched multiple times if sync not yet completed', func
     // User still has no delta token and no emails, so condition is still true
     // This tests the current behavior - sync could be dispatched multiple times
     // if user logs in repeatedly before sync completes
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
         InitialEmailSyncJob::dispatch($user, $filter);
     }
 
@@ -487,7 +486,7 @@ test('automatic sync logic dispatches job for new users with correct filter', fu
         ->and($connection->is_active)->toBeTrue();
 
     // Simulate automatic sync dispatch logic from controller
-    if (!$user->hasDeltaToken() && $user->emails()->count() === 0) {
+    if (! $user->hasDeltaToken() && $user->emails()->count() === 0) {
         $sevenDaysAgo = now()->subDays(7)->toIso8601String();
         $filter = "receivedDateTime ge {$sevenDaysAgo}";
         InitialEmailSyncJob::dispatch($user, $filter);

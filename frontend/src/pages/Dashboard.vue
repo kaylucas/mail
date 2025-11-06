@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
+import axios from '../axios'
 import { clearAuthState } from '../router/index.js'
 import AppLayout from '../layouts/AppLayout.vue'
 import EmailSyncIndicator from '../components/EmailSyncIndicator.vue'

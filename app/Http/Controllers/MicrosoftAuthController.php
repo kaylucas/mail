@@ -164,22 +164,43 @@ class MicrosoftAuthController extends Controller
             $name = $profile['displayName'];
             $email = $profile['mail'] ?? $profile['userPrincipalName'];
 
-        // Find or create user by email (primary identifier across all auth providers)
-        $user = User::firstOrCreate(
-            ['email' => $email],  // Find by email only
-            [
-                'name' => $name,
-                'microsoft_id' => $microsoftId,
-            ]
-        );
+            // Find user by Microsoft ID first (most reliable identifier)
+            // Fall back to email if Microsoft ID not found (handles email changes)
+            $user = User::where('microsoft_id', $microsoftId)->first();
 
-        // Update microsoft_id and name if user already existed
-        if (!$user->wasRecentlyCreated) {
-            $user->update([
-                'name' => $name,
-                'microsoft_id' => $microsoftId,  // Update Microsoft ID in case it changed
-            ]);
-        }
+            if (! $user) {
+                // Not found by Microsoft ID, try by email
+                $user = User::where('email', $email)->first();
+            }
+
+            if ($user) {
+                // Update existing user - sync both microsoft_id and email
+                // This handles cases where email or microsoft_id changed
+                $user->update([
+                    'name' => $name,
+                    'email' => $email,
+                    'microsoft_id' => $microsoftId,
+                ]);
+
+                Log::info('Updated existing user during OAuth callback', [
+                    'user_id' => $user->id,
+                    'microsoft_id' => $microsoftId,
+                    'email' => $email,
+                ]);
+            } else {
+                // Create new user - no existing match found
+                $user = User::create([
+                    'name' => $name,
+                    'email' => $email,
+                    'microsoft_id' => $microsoftId,
+                ]);
+
+                Log::info('Created new user during OAuth callback', [
+                    'user_id' => $user->id,
+                    'microsoft_id' => $microsoftId,
+                    'email' => $email,
+                ]);
+            }
 
             // Create or update Office365 connection
             $connection = Office365Connection::updateOrCreate(
@@ -211,10 +232,10 @@ class MicrosoftAuthController extends Controller
                 $sevenDaysAgo = now()->subDays(7)->toIso8601String();
                 $filter = "receivedDateTime ge {$sevenDaysAgo}";
 
-//                 Log::info('Dispatching initial email sync for new user', [
-//                     'user_id' => $user->id,
-//                     'filter' => $filter,
-                ]);
+                // Log::info('Dispatching initial email sync for new user', [
+                //     'user_id' => $user->id,
+                //     'filter' => $filter,
+                // ]);
 
                 // Dispatch job and capture job UUID
                 $job = \App\Jobs\InitialEmailSyncJob::dispatch($user, null); // No filter for full initial sync
@@ -273,12 +294,29 @@ class MicrosoftAuthController extends Controller
     }
 
     /**
-     * Get the authenticated user.
+     * Get the authenticated user with token expiry information.
      */
     public function user(Request $request)
     {
         $user = $request->user()->load('office365Connection');
+        $userData = $user->toArray();
 
-        return response()->json($user);
+        // Add token expiry information if connection exists
+        if ($user->office365Connection) {
+            $connection = $user->office365Connection;
+            $expiresAt = $connection->token_expires_at;
+
+            // Calculate time until token expires
+            if ($expiresAt) {
+                $expiresInSeconds = max(0, $expiresAt->diffInSeconds(now(), false));
+                $isExpired = $connection->isTokenExpired();
+
+                $userData['office365_connection']['token_expires_in_seconds'] = abs($expiresInSeconds);
+                $userData['office365_connection']['token_is_expired'] = $isExpired;
+                $userData['office365_connection']['token_expires_soon'] = ! $isExpired && $expiresInSeconds < 300; // < 5 minutes
+            }
+        }
+
+        return response()->json($userData);
     }
 }

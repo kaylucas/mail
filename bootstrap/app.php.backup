@@ -13,6 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->statefulApi();
+
         // Trust proxies (ngrok, load balancers, etc.)
         // This allows Laravel to properly handle X-Forwarded-* headers
         $middleware->trustProxies(at: '*');

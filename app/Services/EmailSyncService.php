@@ -8,7 +8,6 @@ use App\Models\EmailFolder;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -24,8 +23,6 @@ class EmailSyncService
     /**
      * Sync all mail folders from Microsoft Graph to database
      *
-     * @param User $user
-     * @return array
      * @throws \Exception
      */
     public function syncFolders(User $user): array
@@ -34,7 +31,7 @@ class EmailSyncService
             Log::info('Starting folder sync', ['user_id' => $user->id]);
 
             $connection = $user->office365Connection;
-            if (!$connection || !$connection->is_active) {
+            if (! $connection || ! $connection->is_active) {
                 throw new \Exception("No active Office365 connection found for user {$user->id}");
             }
 
@@ -70,18 +67,18 @@ class EmailSyncService
             Log::info('Folder sync completed', [
                 'user_id' => $user->id,
                 'folders_synced' => $foldersCount,
-                'folder_ids_count' => count($folderIds)
+                'folder_ids_count' => count($folderIds),
             ]);
 
             return [
                 'folders_synced' => $foldersCount,
-                'folder_ids' => $folderIds
+                'folder_ids' => $folderIds,
             ];
         } catch (\Exception $e) {
             Log::error('Folder sync failed', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
             throw new \Exception("Failed to sync folders: {$e->getMessage()}");
         }
@@ -90,9 +87,8 @@ class EmailSyncService
     /**
      * Perform initial delta query to sync all messages
      *
-     * @param User $user
-     * @param string|null $filter Optional OData filter (e.g., 'receivedDateTime ge 2025-10-30T00:00:00Z')
-     * @return array
+     * @param  string|null  $filter  Optional OData filter (e.g., 'receivedDateTime ge 2025-10-30T00:00:00Z')
+     *
      * @throws \Exception
      */
     public function initialSync(User $user, ?string $filter = null): array
@@ -104,7 +100,7 @@ class EmailSyncService
             $folderResult = $this->syncFolders($user);
 
             $connection = $user->office365Connection;
-            if (!$connection || !$connection->is_active) {
+            if (! $connection || ! $connection->is_active) {
                 throw new \Exception("No active Office365 connection found for user {$user->id}");
             }
 
@@ -125,19 +121,19 @@ class EmailSyncService
             // Add filter if provided (e.g., last 7 days)
             if ($filter) {
                 // Validate filter syntax before using
-                if (!$this->isValidODataFilter($filter)) {
+                if (! $this->isValidODataFilter($filter)) {
                     Log::warning('Invalid OData filter provided', [
                         'user_id' => $user->id,
-                        'filter' => $filter
+                        'filter' => $filter,
                     ]);
                     throw new \InvalidArgumentException("Invalid OData filter syntax: {$filter}");
                 }
 
-                $url .= '&$filter=' . rawurlencode($filter);
+                $url .= '&$filter='.rawurlencode($filter);
                 Log::info('Applying filter to initial sync', [
                     'user_id' => $user->id,
                     'filter' => $filter,
-                    'encoded' => rawurlencode($filter)
+                    'encoded' => rawurlencode($filter),
                 ]);
             }
 
@@ -156,7 +152,7 @@ class EmailSyncService
                         ->get($url);
                 }
 
-                if (!$response->successful()) {
+                if (! $response->successful()) {
                     throw new \Exception("Graph API request failed: {$response->status()} - {$response->body()}");
                 }
 
@@ -185,7 +181,7 @@ class EmailSyncService
                     Log::info('Initial sync progress', [
                         'user_id' => $user->id,
                         'messages_synced' => $messagesSynced,
-                        'pages_processed' => $pagesProcessed
+                        'pages_processed' => $pagesProcessed,
                     ]);
                 }
 
@@ -194,34 +190,121 @@ class EmailSyncService
                     $url = $data['@odata.nextLink'];
                 } elseif (isset($data['@odata.deltaLink'])) {
                     $deltaToken = $data['@odata.deltaLink'];
+                    Log::info('Delta link found in response', [
+                        'user_id' => $user->id,
+                        'delta_token_preview' => substr($deltaToken, 0, 100),
+                    ]);
                     $url = null; // End loop
                 } else {
                     // Neither link present, end pagination
+                    Log::warning('No next link or delta link in response', [
+                        'user_id' => $user->id,
+                        'page' => $pagesProcessed,
+                        'response_keys' => array_keys($data),
+                    ]);
                     $url = null;
                 }
             }
 
-            // Store delta token
+            // Store delta token if found
             if ($deltaToken) {
-                $user->updateDeltaToken($deltaToken);
-                Log::info('Delta token stored', [
+                $result = $user->updateDeltaToken($deltaToken);
+                Log::info('Delta token update attempted', [
                     'user_id' => $user->id,
-                    'delta_token_length' => strlen($deltaToken)
+                    'delta_token_length' => strlen($deltaToken),
+                    'update_result' => $result,
+                    'token_preview' => substr($deltaToken, 0, 100),
                 ]);
+
+                // Verify it was saved
+                $user->refresh();
+                if (!$user->hasDeltaToken()) {
+                    Log::error('Delta token failed to persist', [
+                        'user_id' => $user->id,
+                        'attempted_length' => strlen($deltaToken),
+                    ]);
+                } else {
+                    Log::info('Delta token successfully persisted', [
+                        'user_id' => $user->id,
+                        'persisted_length' => strlen($user->email_delta_token),
+                    ]);
+                }
+            } else {
+                Log::warning('No delta token received from initial sync', [
+                    'user_id' => $user->id,
+                    'pages_processed' => $pagesProcessed,
+                    'filter_applied' => !empty($filter),
+                ]);
+
+                // If filter was applied and no delta token, make an empty request to establish delta
+                if (!empty($filter)) {
+                    Log::info('Making empty delta request to establish delta token', [
+                        'user_id' => $user->id,
+                    ]);
+
+                    try {
+                        $deltaUrl = 'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta?$select=id';
+                        $deltaResponse = Http::withToken($connection->access_token)
+                            ->timeout(30)
+                            ->get($deltaUrl);
+
+                        if ($deltaResponse->successful()) {
+                            $deltaData = $deltaResponse->json();
+
+                            // Skip to the delta link by following all nextLinks
+                            while (isset($deltaData['@odata.nextLink'])) {
+                                $response = Http::withToken($connection->access_token)
+                                    ->timeout(30)
+                                    ->get($deltaData['@odata.nextLink']);
+
+                                if (!$response->successful()) {
+                                    break;
+                                }
+                                $deltaData = $response->json();
+                            }
+
+                            if (isset($deltaData['@odata.deltaLink'])) {
+                                $deltaToken = $deltaData['@odata.deltaLink'];
+                                $result = $user->updateDeltaToken($deltaToken);
+
+                                Log::info('Delta token established via empty request', [
+                                    'user_id' => $user->id,
+                                    'update_result' => $result,
+                                    'token_length' => strlen($deltaToken),
+                                ]);
+
+                                $user->refresh();
+                                if ($user->hasDeltaToken()) {
+                                    Log::info('Delta token successfully persisted via fallback', [
+                                        'user_id' => $user->id,
+                                    ]);
+                                }
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to establish delta token via empty request', [
+                            'user_id' => $user->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
 
+            // Final check
+            $user->refresh();
             Log::info('Initial email sync completed', [
                 'user_id' => $user->id,
                 'messages_synced' => $messagesSynced,
                 'folders_synced' => $folderResult['folders_synced'],
-                'pages_processed' => $pagesProcessed
+                'pages_processed' => $pagesProcessed,
+                'has_delta_token' => $user->hasDeltaToken(),
             ]);
 
             return [
                 'messages_synced' => $messagesSynced,
                 'folders_synced' => $folderResult['folders_synced'],
                 'delta_token' => $deltaToken,
-                'pages_processed' => $pagesProcessed
+                'pages_processed' => $pagesProcessed,
             ];
         } catch (\Exception $e) {
             Log::error('Initial email sync failed', [
@@ -229,7 +312,7 @@ class EmailSyncService
                 'messages_synced' => $messagesSynced ?? 0,
                 'pages_processed' => $pagesProcessed ?? 0,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
             throw new \Exception("Failed to perform initial sync: {$e->getMessage()}");
         }
@@ -238,8 +321,6 @@ class EmailSyncService
     /**
      * Perform incremental sync using stored delta token
      *
-     * @param User $user
-     * @return array
      * @throws \Exception
      */
     public function processDeltaSync(User $user): array
@@ -247,12 +328,12 @@ class EmailSyncService
         try {
             Log::info('Starting delta sync', ['user_id' => $user->id]);
 
-            if (!$user->hasDeltaToken()) {
+            if (! $user->hasDeltaToken()) {
                 throw new \Exception("No delta token found for user {$user->id}. Must run initial sync first.");
             }
 
             $connection = $user->office365Connection;
-            if (!$connection || !$connection->is_active) {
+            if (! $connection || ! $connection->is_active) {
                 throw new \Exception("No active Office365 connection found for user {$user->id}");
             }
 
@@ -285,7 +366,7 @@ class EmailSyncService
                         ->get($url);
                 }
 
-                if (!$response->successful()) {
+                if (! $response->successful()) {
                     throw new \Exception("Graph API delta request failed: {$response->status()} - {$response->body()}");
                 }
 
@@ -338,20 +419,20 @@ class EmailSyncService
                 'user_id' => $user->id,
                 'messages_created' => $messagesCreated,
                 'messages_updated' => $messagesUpdated,
-                'messages_deleted' => $messagesDeleted
+                'messages_deleted' => $messagesDeleted,
             ]);
 
             return [
                 'messages_created' => $messagesCreated,
                 'messages_updated' => $messagesUpdated,
                 'messages_deleted' => $messagesDeleted,
-                'delta_token' => $newDeltaToken
+                'delta_token' => $newDeltaToken,
             ];
         } catch (\Exception $e) {
             Log::error('Delta sync failed', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
             throw new \Exception("Failed to perform delta sync: {$e->getMessage()}");
         }
@@ -359,10 +440,6 @@ class EmailSyncService
 
     /**
      * Fetch and store a single message by ID
-     *
-     * @param User $user
-     * @param string $messageId
-     * @return Email|null
      */
     public function syncSingleMessage(User $user, string $messageId): ?Email
     {
@@ -370,7 +447,7 @@ class EmailSyncService
             Log::info('Syncing single message', ['user_id' => $user->id, 'message_id' => $messageId]);
 
             $connection = $user->office365Connection;
-            if (!$connection || !$connection->is_active) {
+            if (! $connection || ! $connection->is_active) {
                 throw new \Exception("No active Office365 connection found for user {$user->id}");
             }
 
@@ -391,10 +468,11 @@ class EmailSyncService
 
             if ($response->status() === 404) {
                 Log::warning('Message not found', ['user_id' => $user->id, 'message_id' => $messageId]);
+
                 return null;
             }
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new \Exception("Graph API request failed: {$response->status()} - {$response->body()}");
             }
 
@@ -404,7 +482,7 @@ class EmailSyncService
             Log::info('Single message synced', [
                 'user_id' => $user->id,
                 'message_id' => $messageId,
-                'subject' => $messageData['subject'] ?? 'N/A'
+                'subject' => $messageData['subject'] ?? 'N/A',
             ]);
 
             return $email;
@@ -412,7 +490,7 @@ class EmailSyncService
             Log::error('Failed to sync single message', [
                 'user_id' => $user->id,
                 'message_id' => $messageId,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
             throw $e;
         }
@@ -420,10 +498,6 @@ class EmailSyncService
 
     /**
      * Parse Graph API message data and store/update in database
-     *
-     * @param User $user
-     * @param array $messageData
-     * @return Email
      */
     private function storeMessage(User $user, array $messageData): Email
     {
@@ -442,18 +516,18 @@ class EmailSyncService
         $replyTo = $this->parseRecipients($messageData['replyTo'] ?? []);
 
         // Parse from and sender
-                // Parse from and sender (with length limits for database)
-        $fromName = isset($messageData['from']['emailAddress']['name']) 
-            ? mb_substr($messageData['from']['emailAddress']['name'], 0, 1000) 
+        // Parse from and sender (with length limits for database)
+        $fromName = isset($messageData['from']['emailAddress']['name'])
+            ? mb_substr($messageData['from']['emailAddress']['name'], 0, 1000)
             : null;
-        $fromEmail = isset($messageData['from']['emailAddress']['address']) 
-            ? mb_substr($messageData['from']['emailAddress']['address'], 0, 250) 
+        $fromEmail = isset($messageData['from']['emailAddress']['address'])
+            ? mb_substr($messageData['from']['emailAddress']['address'], 0, 250)
             : null;
-        $senderName = isset($messageData['sender']['emailAddress']['name']) 
-            ? mb_substr($messageData['sender']['emailAddress']['name'], 0, 1000) 
+        $senderName = isset($messageData['sender']['emailAddress']['name'])
+            ? mb_substr($messageData['sender']['emailAddress']['name'], 0, 1000)
             : null;
-        $senderEmail = isset($messageData['sender']['emailAddress']['address']) 
-            ? mb_substr($messageData['sender']['emailAddress']['address'], 0, 250) 
+        $senderEmail = isset($messageData['sender']['emailAddress']['address'])
+            ? mb_substr($messageData['sender']['emailAddress']['address'], 0, 250)
             : null;
 
         // Parse body
@@ -479,7 +553,7 @@ class EmailSyncService
         $email = Email::updateOrCreate(
             [
                 'user_id' => $user->id,
-                'message_id' => $messageData['id']
+                'message_id' => $messageData['id'],
             ],
             [
                 'internet_message_id' => $messageData['internetMessageId'] ?? null,
@@ -506,7 +580,7 @@ class EmailSyncService
                 'categories' => $messageData['categories'] ?? [],
                 'web_link' => $messageData['webLink'] ?? null,
                 'email_folder_id' => $folder?->id,
-                'office365_connection_id' => $user->office365Connection->id
+                'office365_connection_id' => $user->office365Connection->id,
             ]
         );
 
@@ -522,10 +596,6 @@ class EmailSyncService
 
     /**
      * Store attachment metadata (not content) for an email
-     *
-     * @param Email $email
-     * @param array $attachmentsData
-     * @return void
      */
     private function storeAttachments(Email $email, array $attachmentsData): void
     {
@@ -533,7 +603,7 @@ class EmailSyncService
             EmailAttachment::updateOrCreate(
                 [
                     'email_id' => $email->id,
-                    'attachment_id' => $attachmentData['id']
+                    'attachment_id' => $attachmentData['id'],
                 ],
                 [
                     'name' => $attachmentData['name'] ?? null,
@@ -544,38 +614,32 @@ class EmailSyncService
                     'content_location' => $attachmentData['contentLocation'] ?? null,
                     'last_modified_date_time' => isset($attachmentData['lastModifiedDateTime'])
                         ? Carbon::parse($attachmentData['lastModifiedDateTime'])
-                        : null
+                        : null,
                 ]
             );
         }
 
         Log::info('Attachments stored', [
             'email_id' => $email->id,
-            'attachment_count' => count($attachmentsData)
+            'attachment_count' => count($attachmentsData),
         ]);
     }
 
     /**
      * Parse recipients array from Graph API format
-     *
-     * @param array $recipients
-     * @return array
      */
     private function parseRecipients(array $recipients): array
     {
         return array_map(function ($recipient) {
             return [
                 'name' => $recipient['emailAddress']['name'] ?? null,
-                'email' => $recipient['emailAddress']['address'] ?? null
+                'email' => $recipient['emailAddress']['address'] ?? null,
             ];
         }, $recipients);
     }
 
     /**
      * Validate OData filter syntax for Microsoft Graph API
-     *
-     * @param string $filter
-     * @return bool
      */
     private function isValidODataFilter(string $filter): bool
     {
@@ -588,11 +652,6 @@ class EmailSyncService
 
     /**
      * Fetch child folders recursively
-     *
-     * @param User $user
-     * @param string $accessToken
-     * @param string $parentFolderId
-     * @return array
      */
     private function fetchChildFolders(User $user, string $accessToken, string $parentFolderId, int $connectionId): array
     {
@@ -619,16 +678,12 @@ class EmailSyncService
 
         return [
             'folder_ids' => $folderIds,
-            'count' => $count
+            'count' => $count,
         ];
     }
 
     /**
      * Fetch a page of folders with pagination support
-     *
-     * @param string $accessToken
-     * @param string $url
-     * @return array
      */
     private function fetchFoldersPage(string $accessToken, string $url): array
     {
@@ -639,11 +694,11 @@ class EmailSyncService
                 ->timeout(30)
                 ->get($url);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('Failed to fetch folders page', [
                     'status' => $response->status(),
                     'url' => $url,
-                    'body' => $response->body()
+                    'body' => $response->body(),
                 ]);
                 throw new \Exception("Failed to fetch folders: {$response->status()}");
             }
@@ -661,17 +716,13 @@ class EmailSyncService
 
     /**
      * Store folder in database
-     *
-     * @param User $user
-     * @param array $folderData
-     * @return EmailFolder
      */
     private function storeFolder(User $user, array $folderData, int $connectionId): EmailFolder
     {
         return EmailFolder::updateOrCreate(
             [
                 'user_id' => $user->id,
-                'folder_id' => $folderData['id']
+                'folder_id' => $folderData['id'],
             ],
             [
                 'parent_folder_id' => $folderData['parentFolderId'] ?? null,
@@ -680,7 +731,7 @@ class EmailSyncService
                 'total_item_count' => $folderData['totalItemCount'] ?? 0,
                 'unread_item_count' => $folderData['unreadItemCount'] ?? 0,
                 'child_folder_count' => $folderData['childFolderCount'] ?? 0,
-                'is_hidden' => $folderData['isHidden'] ?? false
+                'is_hidden' => $folderData['isHidden'] ?? false,
             ]
         );
     }

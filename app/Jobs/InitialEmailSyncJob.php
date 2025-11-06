@@ -14,49 +14,37 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-class InitialEmailSyncJob implements ShouldQueue, ShouldBeUnique
+class InitialEmailSyncJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * The number of times the job may be attempted.
-     *
-     * @var int
      */
     public int $tries = 3;
 
     /**
      * The number of seconds the job can run before timing out.
-     *
-     * @var int
      */
     public int $timeout = 600;
 
     /**
      * The maximum number of unhandled exceptions to allow before failing.
-     *
-     * @var int
      */
     public int $maxExceptions = 3;
 
     /**
      * The number of seconds after which the job's unique lock will be released.
-     *
-     * @var int
      */
     public int $uniqueFor = 3600;
 
     /**
      * The user to sync emails for.
-     *
-     * @var User
      */
     protected User $user;
 
     /**
      * Optional OData filter for date range filtering.
-     *
-     * @var string|null
      */
     protected ?string $filter = null;
 
@@ -79,11 +67,11 @@ class InitialEmailSyncJob implements ShouldQueue, ShouldBeUnique
                 'user_id' => $this->user->id,
                 'job_uuid' => $this->job->uuid(),
                 'attempt' => $this->attempts(),
-                'filter' => $this->filter
+                'filter' => $this->filter,
             ]);
 
             // Check if user has Office365Connection
-            if (!$this->user->office365Connection) {
+            if (! $this->user->office365Connection) {
                 throw new \Exception("User {$this->user->id} has no Office365 connection");
             }
 
@@ -98,12 +86,13 @@ class InitialEmailSyncJob implements ShouldQueue, ShouldBeUnique
                 'user_id' => $this->user->id,
                 'messages_synced' => $messagesSynced,
                 'folders_synced' => $foldersSynced,
-                'has_delta_token' => !empty($deltaToken)
+                'has_delta_token' => ! empty($deltaToken),
             ]);
 
-            // Clear current_sync_job_id when complete
+            // Clear current_sync_job_id and update sync completion time
             $this->user->update([
                 'current_sync_job_id' => null,
+                'sync_started_at' => null,
             ]);
 
             // Clean up progress cache after completion
@@ -116,7 +105,7 @@ class InitialEmailSyncJob implements ShouldQueue, ShouldBeUnique
                 'user_id' => $this->user->id,
                 'job_uuid' => $this->job->uuid(),
                 'messages_synced' => $messagesSynced,
-                'folders_synced' => $foldersSynced
+                'folders_synced' => $foldersSynced,
             ]);
         } catch (\Exception $e) {
             Log::error('InitialEmailSyncJob failed', [
@@ -124,8 +113,17 @@ class InitialEmailSyncJob implements ShouldQueue, ShouldBeUnique
                 'job_uuid' => $this->job->uuid(),
                 'attempt' => $this->attempts(),
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
+            // Clear job tracking if this is the last attempt
+            if ($this->attempts() >= $this->tries) {
+                $this->user->update([
+                    'current_sync_job_id' => null,
+                    'sync_started_at' => null,
+                ]);
+                Cache::forget("sync_progress_{$this->user->id}");
+            }
 
             // Re-throw to trigger retry
             throw $e;
@@ -149,7 +147,7 @@ class InitialEmailSyncJob implements ShouldQueue, ShouldBeUnique
         Log::critical('InitialEmailSyncJob failed permanently', [
             'user_id' => $this->user->id,
             'error' => $exception->getMessage(),
-            'trace' => $exception->getTraceAsString()
+            'trace' => $exception->getTraceAsString(),
         ]);
 
         // Future: Send notification to user

@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\MassPrunable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WebhookNotification extends Model
@@ -130,6 +130,7 @@ class WebhookNotification extends Model
     public function recordError(string $error): bool
     {
         $this->increment('processing_attempts');
+
         return $this->update(['last_error' => $error]);
     }
 
@@ -154,7 +155,7 @@ class WebhookNotification extends Model
      */
     public function isFailed(): bool
     {
-        return $this->processing_attempts >= 3 && !$this->isProcessed();
+        return $this->processing_attempts >= 3 && ! $this->isProcessed();
     }
 
     /**

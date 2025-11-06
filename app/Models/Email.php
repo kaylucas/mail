@@ -160,6 +160,6 @@ class Email extends Model
      */
     public function toggleRead(): bool
     {
-        return $this->update(['is_read' => !$this->is_read]);
+        return $this->update(['is_read' => ! $this->is_read]);
     }
 }

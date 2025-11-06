@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\WebhookNotification;
 use App\Models\Email;
+use App\Models\WebhookNotification;
 use App\Services\EmailSyncService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -18,29 +18,21 @@ class ProcessWebhookNotificationJob implements ShouldQueue
 
     /**
      * The number of times the job may be attempted.
-     *
-     * @var int
      */
     public int $tries = 3;
 
     /**
      * The number of seconds the job can run before timing out.
-     *
-     * @var int
      */
     public int $timeout = 120;
 
     /**
      * The maximum number of unhandled exceptions to allow before failing.
-     *
-     * @var int
      */
     public int $maxExceptions = 3;
 
     /**
      * The webhook notification to process.
-     *
-     * @var WebhookNotification
      */
     protected WebhookNotification $notification;
 
@@ -64,40 +56,43 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                 'subscription_id' => $this->notification->subscription_id,
                 'change_type' => $this->notification->change_type,
                 'job_uuid' => $this->job?->uuid(),
-                'attempt' => $this->attempts()
+                'attempt' => $this->attempts(),
             ]);
 
             // Get subscription and user
             $subscription = $this->notification->subscription;
-            if (!$subscription) {
+            if (! $subscription) {
                 Log::warning('Notification subscription not found', [
                     'notification_id' => $this->notification->id,
-                    'subscription_id' => $this->notification->subscription_id
+                    'subscription_id' => $this->notification->subscription_id,
                 ]);
                 $this->notification->markAsProcessed();
+
                 return;
             }
 
             $user = $subscription->user;
-            if (!$user) {
+            if (! $user) {
                 Log::warning('Subscription user not found', [
                     'notification_id' => $this->notification->id,
                     'subscription_id' => $this->notification->subscription_id,
-                    'user_id' => $subscription->user_id
+                    'user_id' => $subscription->user_id,
                 ]);
                 $this->notification->markAsProcessed();
+
                 return;
             }
 
             // Extract message ID from resource
             // Resource format: "Users/{user_id}/Messages/{message_id}"
             $messageId = $this->extractMessageId($this->notification->resource);
-            if (!$messageId) {
+            if (! $messageId) {
                 Log::error('Failed to extract message ID from resource', [
                     'notification_id' => $this->notification->id,
-                    'resource' => $this->notification->resource
+                    'resource' => $this->notification->resource,
                 ]);
                 $this->notification->markAsProcessed();
+
                 return;
             }
 
@@ -109,7 +104,7 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                         'notification_id' => $this->notification->id,
                         'change_type' => $this->notification->change_type,
                         'message_id' => $messageId,
-                        'user_id' => $user->id
+                        'user_id' => $user->id,
                     ]);
 
                     // Fetch and store the message
@@ -119,12 +114,12 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                         Log::info('Message synced successfully from webhook', [
                             'notification_id' => $this->notification->id,
                             'email_id' => $email->id,
-                            'subject' => $email->subject
+                            'subject' => $email->subject,
                         ]);
                     } else {
                         Log::warning('Message not found when syncing from webhook', [
                             'notification_id' => $this->notification->id,
-                            'message_id' => $messageId
+                            'message_id' => $messageId,
                         ]);
                     }
                     break;
@@ -133,7 +128,7 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                     Log::info('Deleting message from webhook notification', [
                         'notification_id' => $this->notification->id,
                         'message_id' => $messageId,
-                        'user_id' => $user->id
+                        'user_id' => $user->id,
                     ]);
 
                     // Delete the email from database
@@ -145,12 +140,12 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                         Log::info('Message deleted successfully from webhook', [
                             'notification_id' => $this->notification->id,
                             'message_id' => $messageId,
-                            'deleted_count' => $deleted
+                            'deleted_count' => $deleted,
                         ]);
                     } else {
                         Log::info('Message not found for deletion', [
                             'notification_id' => $this->notification->id,
-                            'message_id' => $messageId
+                            'message_id' => $messageId,
                         ]);
                     }
                     break;
@@ -158,7 +153,7 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                 default:
                     Log::warning('Unknown change type in webhook notification', [
                         'notification_id' => $this->notification->id,
-                        'change_type' => $this->notification->change_type
+                        'change_type' => $this->notification->change_type,
                     ]);
                     break;
             }
@@ -169,7 +164,7 @@ class ProcessWebhookNotificationJob implements ShouldQueue
             Log::info('ProcessWebhookNotificationJob completed', [
                 'notification_id' => $this->notification->id,
                 'job_uuid' => $this->job?->uuid(),
-                'change_type' => $this->notification->change_type
+                'change_type' => $this->notification->change_type,
             ]);
         } catch (\Exception $e) {
             Log::error('ProcessWebhookNotificationJob failed', [
@@ -177,7 +172,7 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                 'job_uuid' => $this->job?->uuid(),
                 'attempt' => $this->attempts(),
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Re-throw to trigger retry
@@ -191,13 +186,10 @@ class ProcessWebhookNotificationJob implements ShouldQueue
      * Resource format examples:
      * - "Users/{user_id}/Messages/{message_id}"
      * - "Users/user@example.com/Messages/AAMkAD..."
-     *
-     * @param string|null $resource
-     * @return string|null
      */
     private function extractMessageId(?string $resource): ?string
     {
-        if (!$resource) {
+        if (! $resource) {
             return null;
         }
 
@@ -219,19 +211,19 @@ class ProcessWebhookNotificationJob implements ShouldQueue
             'subscription_id' => $this->notification->subscription_id,
             'change_type' => $this->notification->change_type,
             'error' => $exception->getMessage(),
-            'trace' => $exception->getTraceAsString()
+            'trace' => $exception->getTraceAsString(),
         ]);
 
         // Mark as failed for manual review
         try {
             $this->notification->update([
                 'processed_at' => now(),
-                'error_message' => $exception->getMessage()
+                'error_message' => $exception->getMessage(),
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to update notification status after job failure', [
                 'notification_id' => $this->notification->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }

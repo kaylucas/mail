@@ -34,7 +34,7 @@ class WebhookController extends Controller
             ]);
 
             // Validate that token is present
-            if (!$validationToken) {
+            if (! $validationToken) {
                 Log::error('Webhook validation failed - missing validationToken', [
                     'query_params' => $request->query(),
                     'request_ip' => $request->ip(),
@@ -44,7 +44,7 @@ class WebhookController extends Controller
             }
 
             Log::info('Webhook validation successful', [
-                'validation_token' => substr($validationToken, 0, 20) . '...',
+                'validation_token' => substr($validationToken, 0, 20).'...',
                 'request_ip' => $request->ip(),
             ]);
 
@@ -88,13 +88,14 @@ class WebhookController extends Controller
                     'url' => $request->fullUrl(),
                 ]);
 
-                if (!$validationToken) {
+                if (! $validationToken) {
                     Log::error('Webhook validation failed - missing validationToken');
+
                     return response()->json(['error' => 'Missing validationToken parameter'], 400);
                 }
 
                 Log::info('Webhook validation successful', [
-                    'validation_token' => substr($validationToken, 0, 20) . '...',
+                    'validation_token' => substr($validationToken, 0, 20).'...',
                     'request_ip' => $request->ip(),
                 ]);
 
@@ -114,7 +115,7 @@ class WebhookController extends Controller
             ]);
 
             // Validate payload structure
-            if (!isset($data['value']) || !is_array($data['value'])) {
+            if (! isset($data['value']) || ! is_array($data['value'])) {
                 Log::error('Webhook notification failed - invalid payload structure', [
                     'data' => $data,
                     'request_ip' => $request->ip(),
@@ -145,29 +146,31 @@ class WebhookController extends Controller
                         'subscription_id' => $subscriptionId,
                         'change_type' => $changeType,
                         'resource' => $resource,
-                        'has_client_state' => !empty($clientState),
+                        'has_client_state' => ! empty($clientState),
                     ]);
 
                     // Validate required fields
-                    if (!$subscriptionId || !$clientState) {
+                    if (! $subscriptionId || ! $clientState) {
                         Log::warning('Notification missing required fields', [
                             'subscription_id' => $subscriptionId,
-                            'has_client_state' => !empty($clientState),
+                            'has_client_state' => ! empty($clientState),
                             'notification' => $notification,
                         ]);
                         $failedCount++;
+
                         continue;
                     }
 
                     // Find subscription and validate clientState
                     $subscription = GraphSubscription::where('subscription_id', $subscriptionId)->first();
 
-                    if (!$subscription) {
+                    if (! $subscription) {
                         Log::warning('Notification for unknown subscription', [
                             'subscription_id' => $subscriptionId,
                             'request_ip' => $request->ip(),
                         ]);
                         $failedCount++;
+
                         continue;
                     }
 
@@ -175,12 +178,13 @@ class WebhookController extends Controller
                     if ($subscription->client_state !== $clientState) {
                         Log::error('SECURITY WARNING: clientState validation failed', [
                             'subscription_id' => $subscriptionId,
-                            'expected_client_state' => substr($subscription->client_state ?? '', 0, 10) . '...',
-                            'received_client_state' => substr($clientState, 0, 10) . '...',
+                            'expected_client_state' => substr($subscription->client_state ?? '', 0, 10).'...',
+                            'received_client_state' => substr($clientState, 0, 10).'...',
                             'request_ip' => $request->ip(),
                             'user_id' => $subscription->user_id,
                         ]);
                         $failedCount++;
+
                         continue;
                     }
 
@@ -274,7 +278,7 @@ class WebhookController extends Controller
             ]);
 
             // Validate payload structure
-            if (!isset($data['value']) || !is_array($data['value'])) {
+            if (! isset($data['value']) || ! is_array($data['value'])) {
                 Log::error('Lifecycle notification failed - invalid payload structure', [
                     'data' => $data,
                     'request_ip' => $request->ip(),
@@ -299,22 +303,24 @@ class WebhookController extends Controller
                     ]);
 
                     // Validate required fields
-                    if (!$subscriptionId || !$lifecycleEvent) {
+                    if (! $subscriptionId || ! $lifecycleEvent) {
                         Log::warning('Lifecycle notification missing required fields', [
                             'subscription_id' => $subscriptionId,
                             'lifecycle_event' => $lifecycleEvent,
                         ]);
+
                         continue;
                     }
 
                     // Find subscription and validate clientState
                     $subscription = GraphSubscription::where('subscription_id', $subscriptionId)->first();
 
-                    if (!$subscription) {
+                    if (! $subscription) {
                         Log::warning('Lifecycle notification for unknown subscription', [
                             'subscription_id' => $subscriptionId,
                             'lifecycle_event' => $lifecycleEvent,
                         ]);
+
                         continue;
                     }
 
@@ -323,10 +329,11 @@ class WebhookController extends Controller
                         Log::error('SECURITY WARNING: clientState validation failed in lifecycle notification', [
                             'subscription_id' => $subscriptionId,
                             'lifecycle_event' => $lifecycleEvent,
-                            'expected_client_state' => substr($subscription->client_state ?? '', 0, 10) . '...',
-                            'received_client_state' => substr($clientState, 0, 10) . '...',
+                            'expected_client_state' => substr($subscription->client_state ?? '', 0, 10).'...',
+                            'received_client_state' => substr($clientState, 0, 10).'...',
                             'request_ip' => $request->ip(),
                         ]);
+
                         continue;
                     }
 

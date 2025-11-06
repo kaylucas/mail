@@ -17,29 +17,21 @@ class ProcessDeltaSyncJob implements ShouldQueue
 
     /**
      * The number of times the job may be attempted.
-     *
-     * @var int
      */
     public int $tries = 3;
 
     /**
      * The number of seconds the job can run before timing out.
-     *
-     * @var int
      */
     public int $timeout = 300;
 
     /**
      * The maximum number of unhandled exceptions to allow before failing.
-     *
-     * @var int
      */
     public int $maxExceptions = 3;
 
     /**
      * The user to perform delta sync for.
-     *
-     * @var User
      */
     protected User $user;
 
@@ -62,32 +54,35 @@ class ProcessDeltaSyncJob implements ShouldQueue
                 'job_uuid' => $this->job?->uuid(),
                 'attempt' => $this->attempts(),
                 'has_delta_token' => $this->user->hasDeltaToken(),
-                'last_sync_at' => $this->user->last_email_sync_at
+                'last_sync_at' => $this->user->last_email_sync_at,
             ]);
 
             // Check if user has delta token
-            if (!$this->user->hasDeltaToken()) {
+            if (! $this->user->hasDeltaToken()) {
                 Log::warning('ProcessDeltaSyncJob skipped - no delta token', [
                     'user_id' => $this->user->id,
-                    'message' => 'User must run initial sync first'
+                    'message' => 'User must run initial sync first',
                 ]);
+
                 return;
             }
 
             // Check if user has Office365Connection
-            if (!$this->user->office365Connection) {
+            if (! $this->user->office365Connection) {
                 Log::warning('ProcessDeltaSyncJob skipped - no connection', [
-                    'user_id' => $this->user->id
+                    'user_id' => $this->user->id,
                 ]);
+
                 return;
             }
 
             // Check if connection is active
-            if (!$this->user->office365Connection->is_active) {
+            if (! $this->user->office365Connection->is_active) {
                 Log::warning('ProcessDeltaSyncJob skipped - connection inactive', [
                     'user_id' => $this->user->id,
-                    'connection_id' => $this->user->office365Connection->id
+                    'connection_id' => $this->user->office365Connection->id,
                 ]);
+
                 return;
             }
 
@@ -100,7 +95,7 @@ class ProcessDeltaSyncJob implements ShouldQueue
                 'messages_created' => $result['messages_created'],
                 'messages_updated' => $result['messages_updated'],
                 'messages_deleted' => $result['messages_deleted'],
-                'total_changes' => $result['messages_created'] + $result['messages_updated'] + $result['messages_deleted']
+                'total_changes' => $result['messages_created'] + $result['messages_updated'] + $result['messages_deleted'],
             ]);
         } catch (\Exception $e) {
             Log::error('ProcessDeltaSyncJob failed', [
@@ -108,7 +103,7 @@ class ProcessDeltaSyncJob implements ShouldQueue
                 'job_uuid' => $this->job?->uuid(),
                 'attempt' => $this->attempts(),
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Re-throw to trigger retry
@@ -124,7 +119,7 @@ class ProcessDeltaSyncJob implements ShouldQueue
         Log::critical('ProcessDeltaSyncJob failed permanently', [
             'user_id' => $this->user->id,
             'error' => $exception->getMessage(),
-            'trace' => $exception->getTraceAsString()
+            'trace' => $exception->getTraceAsString(),
         ]);
 
         // Future: Send notification to user about sync failure
