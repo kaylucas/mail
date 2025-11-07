@@ -120,7 +120,7 @@ class ForwardActionHandler
         $html .= '<p style="margin: 5px 0;"><strong>Subject:</strong> ' . htmlspecialchars($email->subject ?? '(No Subject)') . '</p>';
 
         if (is_array($email->to_recipients) && !empty($email->to_recipients)) {
-            $toAddresses = array_map(fn($r) => htmlspecialchars($r['email_address']['address'] ?? ''), $email->to_recipients);
+            $toAddresses = array_map(fn($r) => htmlspecialchars($r['email'] ?? ''), $email->to_recipients);
             $html .= '<p style="margin: 5px 0;"><strong>To:</strong> ' . implode(', ', $toAddresses) . '</p>';
         }
 

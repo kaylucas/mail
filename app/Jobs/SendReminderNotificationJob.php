@@ -77,10 +77,10 @@ class SendReminderNotificationJob implements ShouldQueue
             // Send reminder notification email
             $this->sendReminderEmail($reminder);
 
-            // Mark reminder as sent
+            // Mark reminder as completed
             $reminder->update([
-                'status' => 'sent',
-                'sent_at' => now(),
+                'status' => EmailReminder::STATUS_COMPLETED,
+                'completed_at' => now(),
             ]);
 
             Log::info('Reminder notification sent successfully', [

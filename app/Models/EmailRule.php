@@ -122,17 +122,19 @@ class EmailRule extends Model
 
         // Check 'to' condition
         if (!empty($conditions['to'])) {
-            $toRecipients = array_map('strtolower', $email->to_recipients ?? []);
             $searchTerm = strtolower($conditions['to']);
             $found = false;
-            
-            foreach ($toRecipients as $recipient) {
-                if (str_contains($recipient, $searchTerm)) {
-                    $found = true;
-                    break;
+
+            if (is_array($email->to_recipients)) {
+                foreach ($email->to_recipients as $recipient) {
+                    $recipientEmail = strtolower($recipient['email'] ?? '');
+                    if (str_contains($recipientEmail, $searchTerm)) {
+                        $found = true;
+                        break;
+                    }
                 }
             }
-            
+
             if (!$found) {
                 return false;
             }

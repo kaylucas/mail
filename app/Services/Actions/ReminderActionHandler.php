@@ -47,10 +47,10 @@ class ReminderActionHandler
             $reminder = EmailReminder::create([
                 'user_id' => $email->user_id,
                 'email_id' => $email->id,
-                'rule_id' => $action->email_rule_id,
-                'remind_at' => $remindAt,
-                'message' => $message,
-                'status' => 'pending',
+                'applied_by_rule_id' => $action->email_rule_id,
+                'reminder_date' => $remindAt,
+                'reminder_text' => $message,
+                'status' => EmailReminder::STATUS_PENDING,
             ]);
 
             Log::info('Email reminder created', [

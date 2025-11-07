@@ -192,7 +192,7 @@ class EmailRuleEvaluator
             $ruleNumber = $index + 1;
             $prompt .= "Rule {$ruleNumber} (ID: {$rule->id}):\n";
             $prompt .= "Name: {$rule->name}\n";
-            $prompt .= "Criteria: {$rule->ai_prompt}\n\n";
+            $prompt .= "Criteria: {$rule->prompt}\n\n";
         }
 
         $prompt .= "\nFor each rule, respond with true if the email matches the criteria, false otherwise.";
@@ -250,9 +250,9 @@ class EmailRuleEvaluator
             foreach ($actions as $action) {
                 try {
                     $result = match ($action->action_type) {
-                        'label' => $this->labelHandler->execute($email, $action),
+                        'add_label' => $this->labelHandler->execute($email, $action),
                         'forward' => $this->forwardHandler->execute($email, $action),
-                        'reminder' => $this->reminderHandler->execute($email, $action),
+                        'add_reminder' => $this->reminderHandler->execute($email, $action),
                         default => [
                             'success' => false,
                             'error' => "Unknown action type: {$action->action_type}",
@@ -286,13 +286,16 @@ class EmailRuleEvaluator
             EmailRuleExecution::create([
                 'email_rule_id' => $rule->id,
                 'email_id' => $email->id,
-                'matched' => true,
+                'user_id' => $email->user_id,
+                'evaluation_result' => true,
                 'actions_executed' => $actionsExecuted,
-                'actions_failed' => $actionsFailed,
-                'execution_details' => [
-                    'results' => $results,
-                    'executed_at' => now()->toIso8601String(),
-                ],
+                'actions_taken' => $results,
+                'ai_provider' => null,
+                'ai_model' => null,
+                'prompt_sent' => null,
+                'ai_response' => null,
+                'error_message' => null,
+                'execution_time_ms' => null,
             ]);
 
             return [
@@ -313,13 +316,16 @@ class EmailRuleEvaluator
             EmailRuleExecution::create([
                 'email_rule_id' => $rule->id,
                 'email_id' => $email->id,
-                'matched' => true,
+                'user_id' => $email->user_id,
+                'evaluation_result' => false,
                 'actions_executed' => 0,
-                'actions_failed' => $actions->count(),
-                'execution_details' => [
-                    'error' => $e->getMessage(),
-                    'executed_at' => now()->toIso8601String(),
-                ],
+                'actions_taken' => [],
+                'ai_provider' => null,
+                'ai_model' => null,
+                'prompt_sent' => null,
+                'ai_response' => null,
+                'error_message' => $e->getMessage(),
+                'execution_time_ms' => null,
             ]);
 
             return [
@@ -343,7 +349,7 @@ class EmailRuleEvaluator
         }
 
         $toRecipients = is_array($email->to_recipients)
-            ? implode(', ', array_map(fn($r) => $r['email_address']['address'] ?? '', $email->to_recipients))
+            ? implode(', ', array_map(fn($r) => $r['email'] ?? '', $email->to_recipients))
             : '';
 
         return [
