@@ -124,3 +124,29 @@ class User extends Authenticatable
         ]);
     }
 }
+
+    /**
+     * Get the email rules for the user.
+     */
+    public function emailRules()
+    {
+        return $this->hasMany(EmailRule::class);
+    }
+
+    /**
+     * Get the email reminders for the user.
+     */
+    public function emailReminders()
+    {
+        return $this->hasMany(EmailReminder::class);
+    }
+
+    /**
+     * Get the active email rules for the user.
+     */
+    public function activeEmailRules()
+    {
+        return $this->hasMany(EmailRule::class)
+            ->active()
+            ->ordered();
+    }

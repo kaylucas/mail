@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\EmailController;
+use App\Http\Controllers\EmailReminderController;
+use App\Http\Controllers\EmailRuleController;
 use App\Http\Controllers\EmailSyncController;
 use App\Http\Controllers\MicrosoftAuthController;
 use App\Http\Controllers\Office365ConnectionController;
@@ -60,5 +62,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/folders', [EmailController::class, 'folders'])->name('emails.folders');
         Route::get('/{id}', [EmailController::class, 'show'])->name('emails.show');
         Route::patch('/{id}/read', [EmailController::class, 'updateReadStatus'])->name('emails.updateReadStatus');
+    });
+
+    // Email Rules Management Routes
+    Route::prefix('email-rules')->group(function () {
+        Route::get('/', [EmailRuleController::class, 'index'])->name('email-rules.index');
+        Route::post('/', [EmailRuleController::class, 'store'])->name('email-rules.store');
+        Route::get('/{id}', [EmailRuleController::class, 'show'])->name('email-rules.show');
+        Route::put('/{id}', [EmailRuleController::class, 'update'])->name('email-rules.update');
+        Route::delete('/{id}', [EmailRuleController::class, 'destroy'])->name('email-rules.destroy');
+        Route::patch('/{id}/toggle', [EmailRuleController::class, 'toggle'])->name('email-rules.toggle');
+    });
+
+    // Email Reminders Management Routes
+    Route::prefix('email-reminders')->group(function () {
+        Route::get('/', [EmailReminderController::class, 'index'])->name('email-reminders.index');
+        Route::patch('/{id}/dismiss', [EmailReminderController::class, 'dismiss'])->name('email-reminders.dismiss');
+        Route::patch('/{id}/complete', [EmailReminderController::class, 'complete'])->name('email-reminders.complete');
+        Route::patch('/{id}/snooze', [EmailReminderController::class, 'snooze'])->name('email-reminders.snooze');
     });
 });

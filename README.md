@@ -113,6 +113,121 @@ echo "127.0.0.1 mail.loc" | sudo tee -a /etc/hosts
 
 **To disable Traefik:** Comment out `proxy` network and labels in `docker-compose.yml`
 
+## AI-Powered Email Rules
+
+This application includes an intelligent email rules engine that automatically processes incoming emails using AI.
+
+### Features
+
+- **Custom AI Prompts**: Define rules with natural language (e.g., "Is this a customer support request?")
+- **Simple Pre-Filters**: Use sender, subject, or recipient conditions to skip AI for basic rules
+- **Batched AI Evaluation**: Multiple rules evaluated in single API call (cost optimization)
+- **Multiple Actions**: Automatically label, forward, or set reminders
+- **Multiple AI Providers**: Support for Anthropic Claude, OpenAI GPT, Google Gemini
+- **Automatic Classification**: Every email evaluated for automated/human and needs-response detection
+- **Priority-Based**: Rules execute in priority order (lower number = higher priority)
+- **Event-Driven**: Rules trigger automatically on email creation/updates
+
+### Configuration
+
+1. Set up AI provider API key in `.env`:
+   ```env
+   PRISM_PROVIDER=anthropic
+   ANTHROPIC_API_KEY=your_key_here
+
+   # Alternative providers:
+   # PRISM_PROVIDER=openai
+   # OPENAI_API_KEY=your_openai_key
+
+   # PRISM_PROVIDER=gemini
+   # GEMINI_API_KEY=your_gemini_key
+   ```
+
+2. Run migrations:
+   ```bash
+   docker-compose exec app php artisan migrate
+   ```
+
+3. Configure queue worker for `email-rules` queue:
+   ```bash
+   docker-compose exec app php artisan queue:work --queue=email-rules
+   ```
+
+### Usage
+
+1. Navigate to **Settings > Email Rules** in the frontend
+2. Click **Create Rule**
+3. Configure:
+   - **Name**: "Support Requests"
+   - **Simple Conditions** (optional): From contains "@customers.com"
+   - **AI Prompt**: "Is this email requesting technical support?"
+   - **Actions**: Add label "Support", Forward to "support@company.com", or Add reminder
+4. Rules evaluate automatically on incoming emails
+5. View labels and reminders in email list
+
+### API Endpoints
+
+**Email Rules:**
+- `GET /api/email-rules` - List all rules
+- `POST /api/email-rules` - Create rule
+- `PUT /api/email-rules/{id}` - Update rule
+- `DELETE /api/email-rules/{id}` - Delete rule
+- `PATCH /api/email-rules/{id}/toggle` - Toggle active status
+
+**Email Reminders:**
+- `GET /api/email-reminders` - List reminders
+- `PATCH /api/email-reminders/{id}/dismiss` - Dismiss reminder
+- `PATCH /api/email-reminders/{id}/complete` - Complete reminder
+- `PATCH /api/email-reminders/{id}/snooze` - Snooze reminder
+
+### Example Rule Configuration
+
+```json
+{
+  "name": "Support Requests",
+  "description": "Automatically categorize customer support emails",
+  "prompt": "Is this email requesting technical support or reporting a bug?",
+  "simple_conditions": {
+    "from": "@customers.com"
+  },
+  "is_active": true,
+  "priority": 10,
+  "actions": [
+    {
+      "action_type": "add_label",
+      "action_config": {
+        "label_name": "Support"
+      }
+    },
+    {
+      "action_type": "forward",
+      "action_config": {
+        "email_addresses": ["support@company.com"],
+        "include_note": true
+      }
+    },
+    {
+      "action_type": "add_reminder",
+      "action_config": {
+        "days_after": 3,
+        "message": "Follow up on support request"
+      }
+    }
+  ]
+}
+```
+
+### Documentation
+
+See [docs/AI_EMAIL_RULES.md](docs/AI_EMAIL_RULES.md) for detailed documentation including:
+- Architecture overview and event flow
+- How AI evaluation works (batching, cost optimization)
+- Simple conditions vs AI prompts
+- Action types and configuration
+- Database schema
+- Queue configuration
+- Troubleshooting guide
+
 ### Development Workflow
 
 - **Frontend changes**: Edit files in `frontend/src/` - Vite hot-reloads automatically

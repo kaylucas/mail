@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Events\EmailCreated;
+use App\Events\EmailUpdated;
 use App\Models\Email;
 use App\Models\EmailAttachment;
 use App\Models\EmailFolder;
@@ -584,11 +586,22 @@ class EmailSyncService
             ]
         );
 
+        // Capture whether this was a new email or an update
+        $wasRecentlyCreated = $email->wasRecentlyCreated;
+        $changes = $email->getChanges();
+
         // Store attachments if present
         if (isset($messageData['hasAttachments']) && $messageData['hasAttachments'] === true) {
             if (isset($messageData['attachments'])) {
                 $this->storeAttachments($email, $messageData['attachments']);
             }
+        }
+
+        // Dispatch events for email rules processing
+        if ($wasRecentlyCreated) {
+            EmailCreated::dispatch($email);
+        } elseif (! empty($changes)) {
+            EmailUpdated::dispatch($email, $changes);
         }
 
         return $email;

@@ -136,6 +136,20 @@
             </div>
           </div>
 
+          <!-- Email Rules Section -->
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div class="px-6 py-5 border-b border-gray-200">
+              <h2 class="text-lg font-semibold text-gray-900">Email Rules</h2>
+              <p class="mt-1 text-sm text-gray-600">
+                Configure AI-powered rules to automatically process and organize your emails
+              </p>
+            </div>
+
+            <div class="px-6 py-5">
+              <EmailRulesList />
+            </div>
+          </div>
+
           <!-- Microsoft Account Section -->
           <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-5 border-b border-gray-200">
@@ -358,6 +372,7 @@ import {
   LinkSlashIcon
 } from '@heroicons/vue/24/outline'
 import AppLayout from '../layouts/AppLayout.vue'
+import EmailRulesList from '../components/EmailRulesList.vue'
 import axios from '../axios'
 import { clearAuthState } from '../router/index.js'
 

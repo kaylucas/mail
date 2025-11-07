@@ -45,6 +45,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('model:prune', ['--model' => 'App\\Models\\WebhookNotification'])
             ->daily()
             ->at('02:00');
+
+        // Check for email reminders and send notifications
+        $schedule->command('email:check-reminders')
+            ->dailyAt(config('email_rules.reminder_check_time', '09:00'))
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

@@ -80,6 +80,12 @@
         {{ bodyPreview }}
       </p>
 
+      <!-- Labels and Reminders -->
+      <div class="flex items-center gap-2 mt-2">
+        <EmailLabels :labels="email.labels" />
+        <EmailReminderBadge :reminders="email.reminders" />
+      </div>
+
       <!-- Folder label (if not in main folder) -->
       <div v-if="email.email_folder && showFolder" class="mt-2">
         <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 rounded">
@@ -131,6 +137,8 @@ import {
   DocumentIcon
 } from '@heroicons/vue/24/outline'
 import { formatRelativeTime, formatFullDateTime, getInitials, formatFileSize } from '../utils/dateFormat'
+import EmailLabels from './EmailLabels.vue'
+import EmailReminderBadge from './EmailReminderBadge.vue'
 
 const props = defineProps({
   email: {
