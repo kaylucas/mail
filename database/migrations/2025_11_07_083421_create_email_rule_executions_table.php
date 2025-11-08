@@ -13,24 +13,30 @@ return new class extends Migration
     {
         Schema::create('email_rule_executions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('email_id')->constrained()->cascadeOnDelete();
             $table->foreignId('email_rule_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('email_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('ai_provider')->nullable();
-            $table->string('ai_model')->nullable();
-            $table->text('prompt_sent');
-            $table->json('ai_response')->nullable();
-            $table->boolean('evaluation_result');
-            $table->json('actions_executed')->nullable();
-            $table->integer('execution_time_ms')->nullable();
-            $table->text('error_message')->nullable();
-            $table->timestamp('created_at')->useCurrent();
+            
+            // AI evaluation details
+            $table->string('ai_provider')->nullable()->comment('Which provider was used');
+            $table->string('ai_model')->nullable()->comment('Which model was used');
+            $table->text('prompt_sent')->nullable()->comment('Full prompt sent to AI');
+            $table->json('ai_response')->nullable()->comment('Raw AI response');
+            
+            // Execution results
+            $table->boolean('evaluation_result')->default(false)->comment('Did rule match?');
+            $table->integer('actions_executed')->default(0)->comment('Count of successful actions');
+            $table->json('actions_taken')->nullable()->comment('Details of actions executed');
+            $table->text('error_message')->nullable()->comment('Error if execution failed');
+            $table->integer('execution_time_ms')->nullable()->comment('Performance tracking');
+            
+            $table->timestamps();
 
-            // Indexes for performance
+            // Indexes for analytics and debugging
+            $table->index(['email_rule_id', 'created_at']);
             $table->index('email_id');
-            $table->index('email_rule_id');
-            $table->index('user_id');
-            $table->index('created_at');
+            $table->index(['user_id', 'created_at']);
+            $table->index('evaluation_result');
         });
     }
 

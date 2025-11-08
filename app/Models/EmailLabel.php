@@ -11,13 +11,17 @@ class EmailLabel extends Model
 {
     use HasFactory;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<string>
+     */
     protected $fillable = [
         'email_id',
         'label_name',
+        'color',
         'applied_by_rule_id',
     ];
-
-    public $timestamps = false;
 
     /**
      * Get the email that owns the label.

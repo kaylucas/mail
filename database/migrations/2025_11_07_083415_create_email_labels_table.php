@@ -14,17 +14,20 @@ return new class extends Migration
         Schema::create('email_labels', function (Blueprint $table) {
             $table->id();
             $table->foreignId('email_id')->constrained()->cascadeOnDelete();
-            $table->string('label_name', 100);
+            $table->string('label_name');
+            $table->string('color')->nullable()->comment('Hex color code for UI display');
             $table->foreignId('applied_by_rule_id')
                 ->nullable()
                 ->constrained('email_rules')
                 ->nullOnDelete();
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
 
-            // Unique constraint to prevent duplicate labels on same email
+            // Unique constraint: one label per email
             $table->unique(['email_id', 'label_name']);
             
-            // Index for performance
+            // Indexes for performance
+            $table->index('email_id');
+            $table->index('label_name');
             $table->index('applied_by_rule_id');
         });
     }

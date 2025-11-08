@@ -11,20 +11,45 @@ class EmailReminder extends Model
 {
     use HasFactory;
 
+    /**
+     * Status constants for type safety.
+     */
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_TRIGGERED = 'triggered';
+    public const STATUS_DISMISSED = 'dismissed';
+    public const STATUS_COMPLETED = 'completed';
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<string>
+     */
     protected $fillable = [
         'email_id',
         'user_id',
-        'applied_by_rule_id',
-        'remind_at',
-        'message',
+        'reminder_text',
+        'reminder_date',
         'status',
+        'applied_by_rule_id',
         'triggered_at',
+        'dismissed_at',
+        'completed_at',
     ];
 
-    protected $casts = [
-        'remind_at' => 'datetime',
-        'triggered_at' => 'datetime',
-    ];
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'reminder_date' => 'datetime',
+            'triggered_at' => 'datetime',
+            'dismissed_at' => 'datetime',
+            'completed_at' => 'datetime',
+        ];
+    }
 
     /**
      * Get the email that owns the reminder.
@@ -55,7 +80,7 @@ class EmailReminder extends Model
      */
     public function scopePending(Builder $query): Builder
     {
-        return $query->where('status', 'pending');
+        return $query->where('status', self::STATUS_PENDING);
     }
 
     /**
@@ -63,8 +88,8 @@ class EmailReminder extends Model
      */
     public function scopeDue(Builder $query): Builder
     {
-        return $query->where('status', 'pending')
-                     ->where('remind_at', '<=', now());
+        return $query->where('status', self::STATUS_PENDING)
+                     ->where('reminder_date', '<=', now());
     }
 
     /**
@@ -81,7 +106,7 @@ class EmailReminder extends Model
     public function markAsTriggered(): void
     {
         $this->update([
-            'status' => 'triggered',
+            'status' => self::STATUS_TRIGGERED,
             'triggered_at' => now(),
         ]);
     }
@@ -91,7 +116,10 @@ class EmailReminder extends Model
      */
     public function markAsDismissed(): void
     {
-        $this->update(['status' => 'dismissed']);
+        $this->update([
+            'status' => self::STATUS_DISMISSED,
+            'dismissed_at' => now(),
+        ]);
     }
 
     /**
@@ -99,6 +127,9 @@ class EmailReminder extends Model
      */
     public function markAsCompleted(): void
     {
-        $this->update(['status' => 'completed']);
+        $this->update([
+            'status' => self::STATUS_COMPLETED,
+            'completed_at' => now(),
+        ]);
     }
 }

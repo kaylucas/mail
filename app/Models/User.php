@@ -123,7 +123,6 @@ class User extends Authenticatable
             'last_email_sync_at' => now(),
         ]);
     }
-}
 
     /**
      * Get the email rules for the user.
@@ -150,3 +149,4 @@ class User extends Authenticatable
             ->active()
             ->ordered();
     }
+}

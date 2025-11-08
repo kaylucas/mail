@@ -475,3 +475,48 @@ Then start with: `ngrok start mail`
 - ngrok forwards external HTTPS requests to local HTTP
 - Session cookies have Secure flag, work properly through HTTPS
 - Only used for OAuth callback - all other traffic is local
+
+## Webhook Testing
+
+This guide covers ngrok setup for **OAuth authentication only**. If you need to test **Microsoft Graph webhooks** (change notifications for incoming emails), see:
+
+📖 **[docs/WEBHOOK_LOCAL_TESTING.md](docs/WEBHOOK_LOCAL_TESTING.md)**
+
+### Quick Comparison
+
+| Feature | OAuth (this guide) | Webhooks |
+|---------|-------------------|----------|
+| Purpose | User authentication | Real-time email notifications |
+| ngrok usage | Callback URL | Notification endpoint |
+| Configuration | APP_URL, OFFICE365_REDIRECT_URI | WEBHOOK_BASE_URL |
+| Can use same tunnel? | Yes ✓ | Yes ✓ |
+
+### Using ngrok for Both
+
+Single tunnel for both OAuth and webhooks:
+
+```bash
+ngrok http --domain=aery.eu.ngrok.io --host-header=rewrite mail.loc:80
+```
+
+Configure both in `.env`:
+```env
+# OAuth
+APP_URL=https://aery.eu.ngrok.io
+OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback
+
+# Webhooks
+WEBHOOK_BASE_URL=https://aery.eu.ngrok.io
+```
+
+**Different endpoints on same tunnel:**
+- OAuth: `https://aery.eu.ngrok.io/auth/microsoft/callback`
+- Webhooks: `https://aery.eu.ngrok.io/webhooks/microsoft/notifications`
+
+**Restart application after configuring both:**
+```bash
+docker-compose restart app
+docker-compose exec app php artisan config:clear
+```
+
+**For detailed webhook testing instructions**, including queue setup, subscription creation, and troubleshooting, see [docs/WEBHOOK_LOCAL_TESTING.md](docs/WEBHOOK_LOCAL_TESTING.md).

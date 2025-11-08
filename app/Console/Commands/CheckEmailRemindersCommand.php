@@ -63,7 +63,7 @@ class CheckEmailRemindersCommand extends Command
                     if ($hasReply) {
                         // Mark as completed - no need to send reminder
                         $reminder->update([
-                            'status' => 'completed',
+                            'status' => EmailReminder::STATUS_COMPLETED,
                             'completed_at' => now(),
                         ]);
 
@@ -72,7 +72,7 @@ class CheckEmailRemindersCommand extends Command
                     } else {
                         // Trigger notification
                         $reminder->update([
-                            'status' => 'triggered',
+                            'status' => EmailReminder::STATUS_TRIGGERED,
                             'triggered_at' => now(),
                         ]);
 

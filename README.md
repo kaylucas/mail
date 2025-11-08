@@ -228,6 +228,55 @@ See [docs/AI_EMAIL_RULES.md](docs/AI_EMAIL_RULES.md) for detailed documentation 
 - Queue configuration
 - Troubleshooting guide
 
+
+## Real-Time Email Notifications
+
+Microsoft Graph webhooks provide instant email updates without polling.
+
+### How It Works
+
+1. Application creates subscription with Microsoft Graph
+2. Microsoft validates webhook endpoint (HTTPS required)
+3. On email changes, Microsoft sends POST notifications
+4. Async processing via queue jobs
+5. Automatic database sync
+
+### Local Development
+
+Webhooks need publicly accessible HTTPS:
+
+1. **Start ngrok:**
+   ```bash
+   ngrok http --domain=aery.eu.ngrok.io --host-header=rewrite mail.loc:80
+   ```
+
+2. **Configure:**
+   ```env
+   WEBHOOK_BASE_URL=https://aery.eu.ngrok.io
+   WEBHOOK_SECRET_KEY=<32-char-random>
+   ```
+
+3. **Start queue:**
+   ```bash
+   docker-compose exec app php artisan queue:work --queue=notifications,default
+   ```
+
+4. **Create subscription:**
+   ```bash
+   curl -X POST http://mail.loc/api/subscriptions \
+     -H "Authorization: Bearer TOKEN"
+   ```
+
+5. **Test:** Send email and watch it appear instantly!
+
+Full Guide: [docs/WEBHOOK_LOCAL_TESTING.md](docs/WEBHOOK_LOCAL_TESTING.md)
+
+### Production
+
+```env
+WEBHOOK_BASE_URL=https://mail.example.com
+```
+
 ### Development Workflow
 
 - **Frontend changes**: Edit files in `frontend/src/` - Vite hot-reloads automatically

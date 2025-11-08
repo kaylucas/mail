@@ -16,18 +16,18 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('name');
             $table->text('description')->nullable();
-            $table->text('prompt');
+            $table->text('prompt')->comment('AI prompt for evaluation');
             $table->json('simple_conditions')->nullable()->comment('Pre-filter conditions to reduce AI calls');
             $table->boolean('is_active')->default(true);
             $table->integer('priority')->default(0)->comment('Lower number = higher priority');
             $table->string('ai_provider')->nullable()->comment('anthropic, openai, or gemini');
-            $table->string('ai_model')->nullable()->comment('Specific model to use');
+            $table->string('ai_model')->nullable()->comment('Model override for this rule');
             $table->timestamps();
+            $table->softDeletes();
 
             // Indexes for performance
-            $table->index('user_id');
-            $table->index('is_active');
-            $table->index(['user_id', 'priority', 'is_active'], 'idx_user_priority_active');
+            $table->index(['user_id', 'is_active']);
+            $table->index('priority');
         });
     }
 

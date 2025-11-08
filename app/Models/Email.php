@@ -47,6 +47,13 @@ class Email extends Model
     ];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array<string>
+     */
+    protected $appends = ['label_names'];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -97,6 +104,51 @@ class Email extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(EmailAttachment::class);
+    }
+
+    /**
+     * Get the labels for the email (relationship returns Collection of EmailLabel models).
+     */
+    public function labels(): HasMany
+    {
+        return $this->hasMany(EmailLabel::class);
+    }
+
+    /**
+     * Get the reminders for the email.
+     */
+    public function reminders(): HasMany
+    {
+        return $this->hasMany(EmailReminder::class);
+    }
+
+    /**
+     * Get the rule executions for the email.
+     */
+    public function ruleExecutions(): HasMany
+    {
+        return $this->hasMany(EmailRuleExecution::class);
+    }
+
+    /**
+     * Get an array of label names (accessor with different name to avoid conflict).
+     *
+     * @return array<string>
+     */
+    public function getLabelNamesAttribute(): array
+    {
+        return $this->labels->pluck('label_name')->toArray();
+    }
+
+    /**
+     * Check if the email has a specific label.
+     *
+     * @param string $labelName
+     * @return bool
+     */
+    public function hasLabel(string $labelName): bool
+    {
+        return $this->labels()->where('label_name', $labelName)->exists();
     }
 
     /**
@@ -163,48 +215,3 @@ class Email extends Model
         return $this->update(['is_read' => ! $this->is_read]);
     }
 }
-    
-    /**
-     * Get the labels for the email.
-     */
-    public function labels(): HasMany
-    {
-        return $this->hasMany(EmailLabel::class);
-    }
-
-    /**
-     * Get the reminders for the email.
-     */
-    public function reminders(): HasMany
-    {
-        return $this->hasMany(EmailReminder::class);
-    }
-
-    /**
-     * Get the rule executions for the email.
-     */
-    public function ruleExecutions(): HasMany
-    {
-        return $this->hasMany(EmailRuleExecution::class);
-    }
-
-    /**
-     * Get the labels as an array of label names.
-     * 
-     * @return array
-     */
-    public function getLabelsAttribute(): array
-    {
-        return $this->labels()->pluck('label_name')->toArray();
-    }
-
-    /**
-     * Check if the email has a specific label.
-     * 
-     * @param string $labelName
-     * @return bool
-     */
-    public function hasLabel(string $labelName): bool
-    {
-        return $this->labels()->where('label_name', $labelName)->exists();
-    }

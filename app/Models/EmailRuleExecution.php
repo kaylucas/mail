@@ -11,9 +11,14 @@ class EmailRuleExecution extends Model
 {
     use HasFactory;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<string>
+     */
     protected $fillable = [
-        'email_id',
         'email_rule_id',
+        'email_id',
         'user_id',
         'ai_provider',
         'ai_model',
@@ -21,18 +26,26 @@ class EmailRuleExecution extends Model
         'ai_response',
         'evaluation_result',
         'actions_executed',
-        'execution_time_ms',
+        'actions_taken',
         'error_message',
+        'execution_time_ms',
     ];
 
-    protected $casts = [
-        'ai_response' => 'array',
-        'actions_executed' => 'array',
-        'evaluation_result' => 'boolean',
-        'execution_time_ms' => 'integer',
-    ];
-
-    public $timestamps = false;
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'ai_response' => 'array',
+            'actions_taken' => 'array',
+            'evaluation_result' => 'boolean',
+            'actions_executed' => 'integer',
+            'execution_time_ms' => 'integer',
+        ];
+    }
 
     /**
      * Get the email that was evaluated.

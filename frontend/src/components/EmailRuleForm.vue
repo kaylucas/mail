@@ -225,20 +225,31 @@
                                 </label>
                                 <input
                                   :id="`action-forward-${index}`"
-                                  v-model="action.forward_to"
+                                  v-model="action.forwardTo"
                                   type="text"
                                   required
                                   class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                                   placeholder="e.g., team@company.com, manager@company.com"
                                 />
                               </div>
-                              <div>
-                                <label :for="`action-note-${index}`" class="block text-sm text-gray-700 mb-1">
-                                  Include Note
+                              <div class="flex items-center gap-3">
+                                <input
+                                  :id="`action-note-checkbox-${index}`"
+                                  v-model="action.includeNote"
+                                  type="checkbox"
+                                  class="rounded border-gray-300"
+                                />
+                                <label :for="`action-note-checkbox-${index}`" class="text-sm text-gray-700">
+                                  Include note when forwarding
+                                </label>
+                              </div>
+                              <div v-if="action.includeNote">
+                                <label :for="`action-note-text-${index}`" class="block text-sm text-gray-700 mb-1">
+                                  Forwarding Note
                                 </label>
                                 <input
-                                  :id="`action-note-${index}`"
-                                  v-model="action.include_note"
+                                  :id="`action-note-text-${index}`"
+                                  v-model="action.reminderMessage"
                                   type="text"
                                   class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                                   placeholder="Optional note to include when forwarding"
@@ -463,11 +474,11 @@ const isFormValid = computed(() => {
 const addAction = () => {
   formData.value.actions.push({
     type: 'add_label',
-    label_name: '',
-    forward_to: '',
-    include_note: '',
-    days_after: 1,
-    message: ''
+    labelName: '',
+    forwardTo: '',
+    includeNote: false,
+    daysAfter: 1,
+    reminderMessage: ''
   })
 }
 
@@ -490,25 +501,26 @@ const handleSubmit = async () => {
       )
     }
 
-    // Clean up actions based on type
+    // Build actions with correct backend structure: { action_type, action_config }
     cleanedData.actions = cleanedData.actions.map(action => {
-      const cleaned = { type: action.type }
+      const actionConfig = {}
 
       if (action.type === 'add_label') {
-        cleaned.label_name = action.label_name
+        actionConfig.label_name = action.labelName
       } else if (action.type === 'forward') {
-        cleaned.forward_to = action.forward_to.split(',').map(e => e.trim()).filter(e => e)
-        if (action.include_note) {
-          cleaned.include_note = action.include_note
+        actionConfig.email_addresses = action.forwardTo.split(',').map(e => e.trim()).filter(e => e)
+        if (action.includeNote === true) {
+          actionConfig.include_note = true
         }
       } else if (action.type === 'add_reminder') {
-        cleaned.days_after = action.days_after
-        if (action.message) {
-          cleaned.message = action.message
-        }
+        actionConfig.days_after = action.daysAfter
+        actionConfig.message = action.reminderMessage
       }
 
-      return cleaned
+      return {
+        action_type: action.type,
+        action_config: actionConfig
+      }
     })
 
     if (isEditMode.value) {
@@ -533,6 +545,31 @@ const handleCancel = () => {
 // Initialize form with rule data if editing
 onMounted(() => {
   if (props.rule) {
+    // Convert backend action format to form format
+    const convertedActions = props.rule.actions ? props.rule.actions.map(action => {
+      const config = action.action_config || action.actionConfig || {}
+      const base = {
+        type: action.action_type || action.actionType,
+        labelName: '',
+        forwardTo: '',
+        includeNote: false,
+        daysAfter: 1,
+        reminderMessage: ''
+      }
+
+      if (base.type === 'add_label') {
+        base.labelName = config.label_name || ''
+      } else if (base.type === 'forward') {
+        base.forwardTo = Array.isArray(config.email_addresses) ? config.email_addresses.join(', ') : ''
+        base.includeNote = config.include_note === true
+      } else if (base.type === 'add_reminder') {
+        base.daysAfter = config.days_after || 1
+        base.reminderMessage = config.message || ''
+      }
+
+      return base
+    }) : []
+
     formData.value = {
       name: props.rule.name || '',
       description: props.rule.description || '',
@@ -542,7 +579,7 @@ onMounted(() => {
       priority: props.rule.priority || 0,
       ai_provider: props.rule.ai_provider || 'default',
       ai_model: props.rule.ai_model || '',
-      actions: props.rule.actions ? JSON.parse(JSON.stringify(props.rule.actions)) : []
+      actions: convertedActions
     }
 
     // Show conditions if any are set

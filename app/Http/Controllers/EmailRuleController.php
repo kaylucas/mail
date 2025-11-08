@@ -347,6 +347,9 @@ class EmailRuleController extends Controller
                 'is_active' => ! $rule->is_active,
             ]);
 
+            // Load actions relationship for complete response
+            $rule->load('actions');
+
             Log::info('Email rule toggled', [
                 'user_id' => $user->id,
                 'rule_id' => $rule->id,
@@ -354,11 +357,8 @@ class EmailRuleController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Email rule status updated successfully',
-                'data' => [
-                    'id' => $rule->id,
-                    'is_active' => $rule->is_active,
-                ],
+                'message' => 'Email rule ' . ($rule->is_active ? 'enabled' : 'disabled') . ' successfully',
+                'data' => $rule,
             ], 200);
         } catch (\Exception $e) {
             Log::error('Failed to toggle email rule', [

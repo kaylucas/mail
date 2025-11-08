@@ -18,8 +18,9 @@ return new class extends Migration
             $table->json('action_config')->comment('Configuration specific to action type');
             $table->timestamps();
 
-            // Index for performance
+            // Indexes for performance
             $table->index('email_rule_id');
+            $table->index('action_type');
         });
     }
 

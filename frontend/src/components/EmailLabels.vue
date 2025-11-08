@@ -3,10 +3,10 @@
     <span
       v-for="label in labels"
       :key="label.id"
-      :class="['inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', getLabelColorClass(label.name)]"
-      :title="label.name"
+      :class="['inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', getLabelColorClass(label.label_name)]"
+      :title="label.label_name"
     >
-      {{ label.name }}
+      {{ label.label_name }}
     </span>
   </div>
 </template>

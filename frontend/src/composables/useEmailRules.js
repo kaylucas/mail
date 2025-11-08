@@ -128,8 +128,8 @@ export function useEmailRules() {
           const response = await axios.patch(`/api/email-rules/${id}/toggle`)
           const updatedRule = response.data.data || response.data
 
-          // Update with server response
-          rules.value[index] = updatedRule
+          // Merge response data to preserve relationships (like actions)
+          rules.value[index] = { ...rules.value[index], ...updatedRule }
 
           return updatedRule
         } catch (err) {
