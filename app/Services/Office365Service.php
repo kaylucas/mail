@@ -389,10 +389,15 @@ class Office365Service
                 ? $params['expirationDateTime']->toIso8601String()
                 : $params['expirationDateTime'];
 
+            // Build lifecycle notification URL
+            $lifecycleUrl = rtrim(config('services.microsoft_graph.webhook_base_url'), '/')
+                . '/' . ltrim(config('services.microsoft_graph.lifecycle_url_path'), '/');
+
             // Build request body
             $requestBody = [
                 'changeType' => $changeType,
                 'notificationUrl' => $params['notificationUrl'],
+                'lifecycleNotificationUrl' => $lifecycleUrl,
                 'resource' => $params['resource'],
                 'expirationDateTime' => $expirationDateTime,
                 'clientState' => $params['clientState'],
@@ -402,7 +407,12 @@ class Office365Service
                 'resource' => $params['resource'],
                 'changeType' => $changeType,
                 'notificationUrl' => $params['notificationUrl'],
+                'lifecycleNotificationUrl' => $lifecycleUrl,
                 'expirationDateTime' => $expirationDateTime,
+            ]);
+
+            Log::info('Lifecycle URL configured', [
+                'lifecycle_url' => $lifecycleUrl,
             ]);
 
             // Make POST request to Microsoft Graph API

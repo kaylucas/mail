@@ -64,7 +64,7 @@ class EmailRuleController extends Controller
                 'simple_conditions' => 'nullable|array',
                 'is_active' => 'nullable|boolean',
                 'priority' => 'nullable|integer|min:0|max:1000',
-                'ai_provider' => ['nullable', Rule::in(['anthropic', 'openai', 'gemini'])],
+                'ai_provider' => ['nullable', Rule::in(['default', 'anthropic', 'openai', 'gemini'])],
                 'ai_model' => 'nullable|string|max:100',
                 'actions' => 'required|array|min:1',
                 'actions.*.action_type' => ['required', Rule::in(['add_label', 'forward', 'add_reminder'])],
@@ -74,6 +74,11 @@ class EmailRuleController extends Controller
             // Validate each action's config based on action_type
             foreach ($validated['actions'] as $index => $action) {
                 $this->validateActionConfig($action['action_type'], $action['action_config'], $index);
+            }
+
+            // Convert 'default' to null so the model uses config default
+            if (isset($validated['ai_provider']) && $validated['ai_provider'] === 'default') {
+                $validated['ai_provider'] = null;
             }
 
             // Create rule and actions in transaction
@@ -130,7 +135,7 @@ class EmailRuleController extends Controller
 
             return response()->json([
                 'message' => 'Failed to create email rule',
-                'error' => $this->sanitizeErrorMessage($e->getMessage()),
+                'error' => app()->environment('local') ? $e->getMessage() : $this->sanitizeErrorMessage($e->getMessage()),
             ], 500);
         }
     }
@@ -204,7 +209,7 @@ class EmailRuleController extends Controller
                 'simple_conditions' => 'nullable|array',
                 'is_active' => 'nullable|boolean',
                 'priority' => 'nullable|integer|min:0|max:1000',
-                'ai_provider' => ['nullable', Rule::in(['anthropic', 'openai', 'gemini'])],
+                'ai_provider' => ['nullable', Rule::in(['default', 'anthropic', 'openai', 'gemini'])],
                 'ai_model' => 'nullable|string|max:100',
                 'actions' => 'required|array|min:1',
                 'actions.*.action_type' => ['required', Rule::in(['add_label', 'forward', 'add_reminder'])],
@@ -214,6 +219,11 @@ class EmailRuleController extends Controller
             // Validate each action's config based on action_type
             foreach ($validated['actions'] as $index => $action) {
                 $this->validateActionConfig($action['action_type'], $action['action_config'], $index);
+            }
+
+            // Convert 'default' to null so the model uses config default
+            if (isset($validated['ai_provider']) && $validated['ai_provider'] === 'default') {
+                $validated['ai_provider'] = null;
             }
 
             // Update rule and recreate actions in transaction

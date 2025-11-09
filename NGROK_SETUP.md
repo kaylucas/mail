@@ -326,7 +326,7 @@ The session cookie is marked with the `Secure` flag, which prevents browsers fro
 
 **Solution:**
 - Verify `APP_URL=https://aery.eu.ngrok.io` in .env (not http://mail.loc)
-- Verify `SESSION_SECURE_COOKIE=true` in .env
+- Verify `SESSION_SECURE_COOKIE=false` in .env (CRITICAL - app runs on HTTP at mail.loc)
 - Verify trusted proxy configuration is in place (see Step 5)
 - Run `composer install` to ensure Microsoft Graph SDK is installed
 - Restart the application: `docker-compose restart app`
@@ -455,13 +455,26 @@ Then start with: `ngrok start mail`
 
 ## Summary
 
+### Local Development (with ngrok for OAuth)
+
 **What changes:**
 - Azure App Registration: Add `https://aery.eu.ngrok.io/auth/microsoft/callback` as redirect URI
 - .env: Set `APP_URL=https://aery.eu.ngrok.io` (CRITICAL - not http://mail.loc)
 - .env: Set `OFFICE365_REDIRECT_URI=https://aery.eu.ngrok.io/auth/microsoft/callback`
-- .env: Set `SESSION_SECURE_COOKIE=true`
+- .env: Set `SESSION_SECURE_COOKIE=false` (CRITICAL - app runs on HTTP at mail.loc)
 - .env: Add ngrok domain to `SANCTUM_STATEFUL_DOMAINS` and `CORS_ALLOWED_ORIGINS`
 - Run: `composer install` to ensure dependencies are installed
+
+### Production Deployment (full HTTPS stack)
+
+When deploying to production with a proper HTTPS domain:
+
+**What changes:**
+- .env: Set `APP_URL=https://mail.example.com` (your production domain)
+- .env: Set `OFFICE365_REDIRECT_URI=https://mail.example.com/auth/microsoft/callback`
+- .env: Set `SESSION_SECURE_COOKIE=true` (REQUIRED - entire stack is HTTPS)
+- .env: Update `SANCTUM_STATEFUL_DOMAINS` and `CORS_ALLOWED_ORIGINS` with production domain
+- Azure App Registration: Add production callback URI
 
 **What stays the same:**
 - Application continues to run at http://mail.loc internally

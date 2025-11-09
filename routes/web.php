@@ -22,7 +22,7 @@ Route::match(['get', 'post'], '/webhooks/microsoft/notifications', [WebhookContr
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.microsoft.notifications');
 
-Route::post('/webhooks/microsoft/lifecycle', [WebhookController::class, 'handleLifecycleNotification'])
+Route::match(['get', 'post'], '/webhooks/microsoft/lifecycle', [WebhookController::class, 'handleLifecycleNotification'])
     ->middleware(\App\Http\Middleware\ValidateWebhookSignature::class)
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])
     ->name('webhooks.microsoft.lifecycle');

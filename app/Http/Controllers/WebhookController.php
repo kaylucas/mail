@@ -258,6 +258,10 @@ class WebhookController extends Controller
     /**
      * Handle subscription lifecycle notifications from Microsoft Graph.
      *
+     * Handles both GET (validation) and POST (lifecycle events):
+     * - GET: Microsoft sends validationToken query param during subscription creation
+     * - POST: Microsoft sends JSON payload with array of lifecycle notifications
+     *
      * Microsoft sends lifecycle events such as:
      * - reauthorizationRequired: Subscription needs to be renewed
      * - missed: Notifications were missed, delta sync needed
@@ -268,6 +272,27 @@ class WebhookController extends Controller
     public function handleLifecycleNotification(Request $request)
     {
         try {
+            // Handle GET request for validation (Microsoft sends validationToken)
+            if ($request->isMethod('get')) {
+                $validationToken = $request->query('validationToken');
+
+                if (! $validationToken) {
+                    Log::warning('Lifecycle webhook validation failed - no token provided', [
+                        'request_ip' => $request->ip(),
+                    ]);
+
+                    return response('Validation token required', 400);
+                }
+
+                Log::info('Lifecycle webhook validation successful', [
+                    'validation_token' => substr($validationToken, 0, 20).'...',
+                    'request_ip' => $request->ip(),
+                ]);
+
+                return response($validationToken, 200)
+                    ->header('Content-Type', 'text/plain');
+            }
+
             // Parse JSON body
             $data = $request->json()->all();
 

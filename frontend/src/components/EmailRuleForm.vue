@@ -249,7 +249,7 @@
                                 </label>
                                 <input
                                   :id="`action-note-text-${index}`"
-                                  v-model="action.reminderMessage"
+                                  v-model="action.forwardNote"
                                   type="text"
                                   class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                                   placeholder="Optional note to include when forwarding"
@@ -474,11 +474,12 @@ const isFormValid = computed(() => {
 const addAction = () => {
   formData.value.actions.push({
     type: 'add_label',
-    labelName: '',
+    label_name: '',
     forwardTo: '',
     includeNote: false,
-    daysAfter: 1,
-    reminderMessage: ''
+    days_after: 1,
+    forwardNote: '',
+    message: ''
   })
 }
 
@@ -506,15 +507,15 @@ const handleSubmit = async () => {
       const actionConfig = {}
 
       if (action.type === 'add_label') {
-        actionConfig.label_name = action.labelName
+        actionConfig.label_name = action.label_name
       } else if (action.type === 'forward') {
         actionConfig.email_addresses = action.forwardTo.split(',').map(e => e.trim()).filter(e => e)
         if (action.includeNote === true) {
           actionConfig.include_note = true
         }
       } else if (action.type === 'add_reminder') {
-        actionConfig.days_after = action.daysAfter
-        actionConfig.message = action.reminderMessage
+        actionConfig.days_after = action.days_after
+        actionConfig.message = action.message
       }
 
       return {
@@ -550,21 +551,22 @@ onMounted(() => {
       const config = action.action_config || action.actionConfig || {}
       const base = {
         type: action.action_type || action.actionType,
-        labelName: '',
+        label_name: '',
         forwardTo: '',
         includeNote: false,
-        daysAfter: 1,
-        reminderMessage: ''
+        days_after: 1,
+        message: '',
+        forwardNote: ''
       }
 
       if (base.type === 'add_label') {
-        base.labelName = config.label_name || ''
+        base.label_name = config.label_name || ''
       } else if (base.type === 'forward') {
         base.forwardTo = Array.isArray(config.email_addresses) ? config.email_addresses.join(', ') : ''
         base.includeNote = config.include_note === true
       } else if (base.type === 'add_reminder') {
-        base.daysAfter = config.days_after || 1
-        base.reminderMessage = config.message || ''
+        base.days_after = config.days_after || 1
+        base.message = config.message || ''
       }
 
       return base
