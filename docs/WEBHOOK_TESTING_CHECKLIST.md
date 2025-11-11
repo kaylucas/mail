@@ -2,6 +2,21 @@
 
 Quick-start checklist for testing Microsoft Graph webhooks locally. For detailed explanations, see [WEBHOOK_LOCAL_TESTING.md](WEBHOOK_LOCAL_TESTING.md).
 
+## ⚠️ Important: Resource Path Clarification
+
+**Your webhook subscription is already configured correctly!**
+
+The application uses `me/messages` as the resource path, which monitors:
+- ✅ ALL folders (inbox, sent, drafts, deleted, custom folders)
+- ✅ ALL subfolders (recursively)
+- ✅ ALL change types (created, updated, deleted)
+
+**You do NOT need to change the resource path.** This is the recommended approach per Microsoft Graph API documentation.
+
+If webhooks aren't working, the issue is **configuration or connectivity**, not the resource path.
+
+---
+
 ## 5-Minute Setup
 
 ### 1. Start ngrok
@@ -69,6 +84,68 @@ exit
 ```
 
 Should show active subscription with expiration date.
+
+## Understanding Your Subscription
+
+### What Does Your Subscription Monitor?
+
+When you create a subscription, it monitors:
+
+**Resource:** `me/messages`
+- This is the ENTIRE mailbox, not just inbox
+- Includes all folders: inbox, sent, drafts, deleted, custom folders
+- Includes all subfolders recursively
+- One subscription covers everything
+
+**Change Types:** `created`, `updated`, `deleted`
+- Created: New email arrives
+- Updated: Email read status changes, flags added, categories changed
+- Deleted: Email moved to trash or permanently deleted
+
+**Expiration:** 10,080 minutes (7 days)
+- Maximum allowed by Microsoft for message resources
+- Must be renewed before expiration (auto-renewal via scheduled job)
+
+### Verify Subscription Details
+
+```bash
+# Check subscription in database
+docker-compose exec mariadb mysql -u mail_user -psecret mail -e "
+SELECT
+    id,
+    subscription_id,
+    resource,
+    change_types,
+    status,
+    expires_at,
+    notification_url
+FROM graph_subscriptions
+WHERE status='active';
+"
+
+# Expected output:
+# id: 1
+# subscription_id: abc-123-def-456
+# resource: me/messages
+# change_types: ["created","updated","deleted"]
+# status: active
+# expires_at: 2024-12-01 10:00:00
+# notification_url: https://aery.eu.ngrok.io/webhooks/microsoft/notifications
+```
+
+### Common Misconceptions
+
+❌ **Myth:** "I need separate subscriptions for inbox, sent items, and drafts"
+✅ **Reality:** One subscription to `me/messages` covers all folders
+
+❌ **Myth:** "Webhooks only work for inbox"
+✅ **Reality:** Webhooks work for all folders when using `me/messages`
+
+❌ **Myth:** "I need to change the resource path to get all emails"
+✅ **Reality:** The current resource path (`me/messages`) already gets all emails
+
+❌ **Myth:** "Subfolders aren't monitored"
+✅ **Reality:** All subfolders are monitored recursively with `me/messages`
 
 ### 8. Test Notification
 
@@ -374,14 +451,37 @@ docker-compose restart app && docker-compose exec app php artisan config:clear &
 
 If you're stuck after following this checklist:
 
-1. Review detailed guide: [WEBHOOK_LOCAL_TESTING.md](WEBHOOK_LOCAL_TESTING.md)
-2. Check Laravel logs: `docker-compose exec app php artisan pail`
-3. Check ngrok traffic: http://127.0.0.1:4040
-4. Verify all success indicators above
-5. Review common mistakes section
-6. Try deleting and recreating subscription
+1. **📖 Comprehensive Diagnostics:** [WEBHOOK_DIAGNOSTICS.md](WEBHOOK_DIAGNOSTICS.md) - Step-by-step troubleshooting guide
+2. **Detailed Setup Guide:** [WEBHOOK_LOCAL_TESTING.md](WEBHOOK_LOCAL_TESTING.md) - Complete webhook setup documentation
+3. **Check Laravel logs:** `docker-compose exec app php artisan pail`
+4. **Check ngrok traffic:** http://127.0.0.1:4040
+5. **Verify all success indicators** above
+6. **Review common mistakes** section
+7. **Try deleting and recreating subscription**
+
+### Quick Diagnostic Commands
+
+```bash
+# 1. Check if subscription exists
+curl -X GET http://mail.loc/api/subscriptions/current \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# 2. Verify subscription in database
+docker-compose exec mariadb mysql -u mail_user -psecret mail \
+  -e "SELECT * FROM graph_subscriptions WHERE status='active';"
+
+# 3. Check for notifications received
+docker-compose exec mariadb mysql -u mail_user -psecret mail \
+  -e "SELECT COUNT(*) FROM webhook_notifications;"
+
+# 4. Test ngrok is accessible
+curl -I https://aery.eu.ngrok.io
+
+# 5. Test validation endpoint
+curl "https://aery.eu.ngrok.io/webhooks/microsoft/notifications?validationToken=test123"
+```
 
 Still stuck? Check these files for implementation details:
-- `app/Http/Controllers/WebhookController.php`
-- `app/Services/GraphSubscriptionService.php`
-- `app/Jobs/ProcessWebhookNotificationJob.php`
+- [app/Http/Controllers/WebhookController.php](app/Http/Controllers/WebhookController.php)
+- [app/Services/GraphSubscriptionService.php](app/Services/GraphSubscriptionService.php)
+- [app/Jobs/ProcessWebhookNotificationJob.php](app/Jobs/ProcessWebhookNotificationJob.php)

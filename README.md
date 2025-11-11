@@ -271,6 +271,93 @@ Webhooks need publicly accessible HTTPS:
 
 Full Guide: [docs/WEBHOOK_LOCAL_TESTING.md](docs/WEBHOOK_LOCAL_TESTING.md)
 
+## Understanding Webhook Subscriptions
+
+### What Does "me/messages" Monitor?
+
+The application uses the resource path `me/messages` for webhook subscriptions. This is the **correct and recommended approach** that monitors:
+
+✅ **All Folders:**
+- Inbox
+- Sent Items
+- Drafts
+- Deleted Items
+- Junk Email
+- All custom folders
+- All subfolders (recursively)
+
+✅ **All Change Types:**
+- Created (new emails)
+- Updated (read status, flags, categories)
+- Deleted (moved to trash or permanently deleted)
+
+**One subscription covers your entire mailbox.** You do NOT need separate subscriptions for different folders.
+
+### Alternative Resource Paths (Not Recommended)
+
+For reference, other resource paths exist but are NOT recommended for this application:
+
+- `me/mailFolders('inbox')/messages` - Only inbox, excludes subfolders
+- `me/mailFolders('{folderId}')/messages` - Specific folder only
+- `me/mailFolders('inbox')/childFolders('{id}')/messages` - Specific subfolder
+
+These require multiple subscriptions to cover the entire mailbox and count against Microsoft's subscription limit (1000 per mailbox).
+
+### Subscription Limits
+
+**Per Microsoft Graph API:**
+- Maximum subscription lifetime: **10,080 minutes (7 days)** for message resources
+- Minimum subscription lifetime: **45 minutes** (auto-bumped by Microsoft)
+- Maximum subscriptions per mailbox: **1,000**
+- Validation timeout: **10 seconds**
+
+**Current Configuration:**
+- Expiration: 10,080 minutes (7 days) - maximum allowed
+- Auto-renewal: Enabled (via scheduled job)
+- Resource: `me/messages` - entire mailbox
+- Change types: created, updated, deleted - all changes
+
+### Verifying Your Subscription
+
+To check if webhooks are working:
+
+```bash
+# 1. Check subscription status
+curl -X GET http://mail.loc/api/subscriptions/current \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# 2. Verify in database
+docker-compose exec mariadb mysql -u mail_user -psecret mail \
+  -e "SELECT subscription_id, resource, status, expires_at FROM graph_subscriptions WHERE status='active';"
+
+# 3. Send test email and check logs
+docker-compose exec app tail -f storage/logs/laravel.log | grep -i webhook
+```
+
+**Expected Results:**
+- Subscription status: "active"
+- Resource: "me/messages"
+- Expires at: Future date (within 7 days)
+- Logs show: "Webhook notification received" when email arrives
+
+### Troubleshooting
+
+If webhooks aren't working:
+
+1. **No active subscription:** Create one via API (see setup above)
+2. **Subscription expired:** Recreate subscription (max 7 days)
+3. **ngrok not running:** Start ngrok tunnel
+4. **Queue worker not running:** Start with `--queue=notifications,default`
+5. **Validation failed:** Check ngrok is accessible from internet
+
+📖 **Detailed Diagnostics:** See [docs/WEBHOOK_DIAGNOSTICS.md](docs/WEBHOOK_DIAGNOSTICS.md) for comprehensive troubleshooting guide.
+
+### Source Documentation
+
+- [Microsoft Graph Change Notifications Overview](https://learn.microsoft.com/en-us/graph/change-notifications-overview)
+- [Subscription Resource Type](https://learn.microsoft.com/en-us/graph/api/resources/subscription)
+- [Outlook Change Notifications](https://learn.microsoft.com/en-us/graph/outlook-change-notifications-overview)
+
 ### Production
 
 ```env

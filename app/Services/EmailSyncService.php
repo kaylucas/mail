@@ -443,10 +443,23 @@ class EmailSyncService
     /**
      * Fetch and store a single message by ID
      */
-    public function syncSingleMessage(User $user, string $messageId): ?Email
+    /**
+     * Sync a single message from Microsoft Graph
+     *
+     * @param User $user
+     * @param string $messageId
+     * @param bool $isWebhookSync Whether this is triggered by a webhook notification
+     * @return Email|null
+     * @throws \Exception
+     */
+    public function syncSingleMessage(User $user, string $messageId, bool $isWebhookSync = false): ?Email
     {
         try {
-            Log::info('Syncing single message', ['user_id' => $user->id, 'message_id' => $messageId]);
+            Log::info('Syncing single message', [
+                'user_id' => $user->id,
+                'message_id' => $messageId,
+                'is_webhook_sync' => $isWebhookSync,
+            ]);
 
             $connection = $user->office365Connection;
             if (! $connection || ! $connection->is_active) {
@@ -479,12 +492,14 @@ class EmailSyncService
             }
 
             $messageData = $response->json();
-            $email = $this->storeMessage($user, $messageData);
+            // Pass webhook flag to storeMessage so it knows whether to dispatch events
+            $email = $this->storeMessage($user, $messageData, $isWebhookSync);
 
             Log::info('Single message synced', [
                 'user_id' => $user->id,
                 'message_id' => $messageId,
                 'subject' => $messageData['subject'] ?? 'N/A',
+                'is_webhook_sync' => $isWebhookSync,
             ]);
 
             return $email;
@@ -500,8 +515,13 @@ class EmailSyncService
 
     /**
      * Parse Graph API message data and store/update in database
+     *
+     * @param User $user
+     * @param array $messageData
+     * @param bool $isWebhookSync Whether this email is being synced from a webhook notification (triggers rules)
+     * @return Email
      */
-    private function storeMessage(User $user, array $messageData): Email
+    private function storeMessage(User $user, array $messageData, bool $isWebhookSync = false): Email
     {
         // Find folder by Graph folder ID
         $folder = null;
@@ -598,10 +618,31 @@ class EmailSyncService
         }
 
         // Dispatch events for email rules processing
-        if ($wasRecentlyCreated) {
-            EmailCreated::dispatch($email);
-        } elseif (! empty($changes)) {
-            EmailUpdated::dispatch($email, $changes);
+        // IMPORTANT: Only dispatch events for webhook syncs (new incoming emails)
+        // Do NOT dispatch for bulk sync operations (initial sync, delta sync, manual sync)
+        if ($isWebhookSync) {
+            if ($wasRecentlyCreated) {
+                Log::debug('Dispatching EmailCreated event for webhook sync', [
+                    'email_id' => $email->id,
+                    'user_id' => $user->id,
+                    'subject' => $email->subject,
+                ]);
+                EmailCreated::dispatch($email);
+            } elseif (! empty($changes)) {
+                Log::debug('Dispatching EmailUpdated event for webhook sync', [
+                    'email_id' => $email->id,
+                    'user_id' => $user->id,
+                    'changes' => array_keys($changes),
+                ]);
+                EmailUpdated::dispatch($email, $changes);
+            }
+        } else {
+            Log::debug('Skipping event dispatch for non-webhook sync', [
+                'email_id' => $email->id,
+                'user_id' => $user->id,
+                'was_created' => $wasRecentlyCreated,
+                'has_changes' => ! empty($changes),
+            ]);
         }
 
         return $email;

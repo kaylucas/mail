@@ -18,6 +18,55 @@ class GraphSubscriptionService
     ) {}
 
     /**
+     * Validate and sanitize expiration minutes value.
+     * 
+     * @param mixed $expirationMinutes The value to validate (could be string, int, null)
+     * @return int Validated expiration minutes between 45 and 10,080
+     * @throws \InvalidArgumentException If value cannot be converted to valid integer
+     */
+    private function validateExpirationMinutes(mixed $expirationMinutes): int
+    {
+        // Handle null or empty values
+        if ($expirationMinutes === null || $expirationMinutes === '') {
+            Log::warning('Expiration minutes is null or empty, using default', [
+                'provided_value' => $expirationMinutes,
+                'default' => 10070,
+            ]);
+            return 10070; // Default to maximum allowed (Microsoft's actual limit)
+        }
+
+        // Check if value is numeric
+        if (!is_numeric($expirationMinutes)) {
+            throw new \InvalidArgumentException(
+                "Expiration minutes must be numeric, received: " . gettype($expirationMinutes) . " value: {$expirationMinutes}"
+            );
+        }
+
+        // Cast to integer
+        $minutes = (int) $expirationMinutes;
+
+        // Microsoft Graph API limits: minimum 45 minutes, maximum 10,070 minutes (actual limit)
+        // Note: Documentation says 10,080 (7 days), but API rejects values above 10,070
+        if ($minutes < 45) {
+            Log::warning('Expiration minutes below minimum, adjusting to 45', [
+                'provided' => $minutes,
+                'adjusted' => 45,
+            ]);
+            return 45;
+        }
+
+        if ($minutes > 10070) {
+            Log::warning('Expiration minutes exceeds maximum, capping at 10,070', [
+                'provided' => $minutes,
+                'adjusted' => 10070,
+            ]);
+            return 10070;
+        }
+
+        return $minutes;
+    }
+
+    /**
      * Create a new Microsoft Graph subscription and store in database.
      */
     public function createSubscription(User $user, array $options = []): GraphSubscription
@@ -32,17 +81,13 @@ class GraphSubscriptionService
             // Prepare subscription parameters with defaults
             $resource = $options['resource'] ?? 'me/messages';
             $changeTypes = $options['changeTypes'] ?? ['created', 'updated', 'deleted'];
-            $expirationMinutes = $options['expirationMinutes']
+            
+            // Get expiration minutes from options or config with proper type handling
+            $rawExpirationMinutes = $options['expirationMinutes'] 
                 ?? config('services.microsoft_graph.subscription_expiration_minutes', 10080);
-
-            // Validate expiration doesn't exceed maximum
-            if ($expirationMinutes > 10080) {
-                Log::warning('Expiration minutes exceeds maximum, capping at 10080', [
-                    'user_id' => $user->id,
-                    'requested' => $expirationMinutes,
-                ]);
-                $expirationMinutes = 10080;
-            }
+            
+            // Validate and sanitize expiration minutes
+            $expirationMinutes = $this->validateExpirationMinutes($rawExpirationMinutes);
 
             // Generate secure clientState
             $clientState = Str::random(32);
@@ -61,7 +106,7 @@ class GraphSubscriptionService
 
             $notificationUrl = rtrim($webhookBaseUrl, '/').'/'.ltrim($notificationUrlPath, '/');
 
-            // Calculate expiration
+            // Calculate expiration - now using validated integer
             $expiresAt = now()->addMinutes($expirationMinutes);
 
             // Prepare params for Office365Service
@@ -77,6 +122,7 @@ class GraphSubscriptionService
                 'user_id' => $user->id,
                 'resource' => $resource,
                 'change_types' => $changeTypes,
+                'expiration_minutes' => $expirationMinutes,
                 'expires_at' => $expiresAt->toIso8601String(),
             ]);
 
@@ -103,6 +149,7 @@ class GraphSubscriptionService
                 'user_id' => $user->id,
                 'subscription_id' => $subscriptionId,
                 'resource' => $resource,
+                'expiration_minutes' => $expirationMinutes,
                 'expires_at' => $expiresAt->toIso8601String(),
             ]);
 
@@ -138,14 +185,19 @@ class GraphSubscriptionService
                 throw new Exception('Office365 connection not found for subscription');
             }
 
-            // Calculate new expiration
-            $newExpiresAt = now()->addMinutes(
-                config('services.microsoft_graph.subscription_expiration_minutes', 10080)
-            );
+            // Get expiration minutes from config with proper type handling
+            $rawExpirationMinutes = config('services.microsoft_graph.subscription_expiration_minutes', 10080);
+            
+            // Validate and sanitize expiration minutes
+            $expirationMinutes = $this->validateExpirationMinutes($rawExpirationMinutes);
+
+            // Calculate new expiration using validated integer
+            $newExpiresAt = now()->addMinutes($expirationMinutes);
 
             Log::info('Renewing Microsoft Graph subscription', [
                 'subscription_id' => $subscription->subscription_id,
                 'user_id' => $subscription->user_id,
+                'expiration_minutes' => $expirationMinutes,
                 'old_expiration' => $subscription->expires_at->toIso8601String(),
                 'new_expiration' => $newExpiresAt->toIso8601String(),
             ]);
@@ -163,6 +215,7 @@ class GraphSubscriptionService
             Log::info('Successfully renewed Microsoft Graph subscription', [
                 'subscription_id' => $subscription->subscription_id,
                 'user_id' => $subscription->user_id,
+                'expiration_minutes' => $expirationMinutes,
                 'new_expiration' => $newExpiresAt->toIso8601String(),
             ]);
 

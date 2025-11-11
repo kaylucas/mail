@@ -77,8 +77,9 @@ class WebhookController extends Controller
     public function handleNotification(Request $request)
     {
         try {
-            // Handle validation request (GET with validationToken query parameter)
-            if ($request->isMethod('get') && $request->has('validationToken')) {
+            // Handle validation request (GET or POST with validationToken query parameter)
+            // Microsoft can send validation as either GET or POST with the token in query params
+            if ($request->has('validationToken')) {
                 $validationToken = $request->query('validationToken');
 
                 Log::info('Webhook validation request received', [
@@ -272,8 +273,9 @@ class WebhookController extends Controller
     public function handleLifecycleNotification(Request $request)
     {
         try {
-            // Handle GET request for validation (Microsoft sends validationToken)
-            if ($request->isMethod('get')) {
+            // Handle validation request (GET or POST with validationToken query parameter)
+            // Microsoft can send validation as either GET or POST with the token in query params
+            if ($request->has('validationToken')) {
                 $validationToken = $request->query('validationToken');
 
                 if (! $validationToken) {

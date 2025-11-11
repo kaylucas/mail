@@ -46,6 +46,19 @@ class ValidateWebhookSignature
                 return $next($request);
             }
 
+            // Skip validation for requests with validationToken query parameter
+            // Microsoft sends these during subscription creation/renewal
+            if ($request->has('validationToken')) {
+                Log::debug('Webhook middleware: Skipping validation for token validation request', [
+                    'path' => $request->path(),
+                    'method' => $request->method(),
+                    'has_token' => true,
+                    'ip' => $request->ip(),
+                ]);
+
+                return $next($request);
+            }
+
             // Log all incoming webhook requests for monitoring
             Log::info('Webhook middleware: Incoming webhook request', [
                 'path' => $request->path(),

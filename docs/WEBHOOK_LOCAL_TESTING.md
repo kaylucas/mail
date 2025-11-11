@@ -2,6 +2,16 @@
 
 Complete guide for testing Microsoft Graph webhooks in your local development environment.
 
+> **✅ IMPORTANT: Your Resource Path is Correct**
+>
+> The current implementation uses `me/messages` which subscribes to **ALL messages across ALL folders** including:
+> - Inbox, Sent Items, Drafts, Deleted Items, Junk Email
+> - All custom folders and subfolders
+>
+> **You do NOT need to change the resource path.** This is the recommended approach per Microsoft Graph API documentation.
+>
+> If webhooks aren't working, the issue is configuration-related, not the resource path. See [docs/WEBHOOK_DIAGNOSTICS.md](WEBHOOK_DIAGNOSTICS.md) for troubleshooting.
+
 ## Overview
 
 Microsoft Graph webhooks enable real-time notifications when emails change (created, updated, deleted). Since Microsoft needs to send POST requests to your application, webhooks require a **publicly accessible HTTPS endpoint**. This guide shows you how to use ngrok to expose your local application for webhook testing.
@@ -185,6 +195,18 @@ curl -X POST http://mail.loc/api/subscriptions \
   }
 }
 ```
+
+**What This Subscription Monitors:**
+- **Resource:** `me/messages` (default, covers entire mailbox)
+- **Folders:** ALL folders (inbox, sent, drafts, deleted, custom folders, subfolders)
+- **Change Types:** created, updated, deleted (all changes)
+- **Expiration:** 10,080 minutes (7 days, maximum allowed)
+
+**Alternative Resource Paths (NOT recommended for your use case):**
+- `me/mailFolders('inbox')/messages` - Only inbox, excludes subfolders
+- `me/mailFolders('{folderId}')/messages` - Specific folder only
+
+The default `me/messages` is the correct choice for monitoring all email activity.
 
 **What happens behind the scenes:**
 
@@ -380,6 +402,76 @@ App\Models\Email::latest()->take(5)->get(['subject', 'from', 'created_at']);
 
 exit
 ```
+
+## Troubleshooting: No Notifications Received
+
+If you've created a subscription but aren't receiving notifications:
+
+### Quick Diagnostic Commands
+
+```bash
+# 1. Check if subscription exists and is active
+curl -X GET http://mail.loc/api/subscriptions/current \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Expected: 200 OK with subscription details
+# If 404: No active subscription - create one
+
+# 2. Verify subscription in database
+docker-compose exec mariadb mysql -u mail_user -psecret mail \
+  -e "SELECT id, subscription_id, resource, status, expires_at FROM graph_subscriptions WHERE status='active';"
+
+# Expected: One row with status='active', resource='me/messages'
+# If empty: Subscription expired or failed - recreate
+
+# 3. Check for webhook notifications received
+docker-compose exec mariadb mysql -u mail_user -psecret mail \
+  -e "SELECT COUNT(*) as notification_count FROM webhook_notifications;"
+
+# Expected: Count > 0 if notifications are being received
+# If 0: Webhooks not reaching your endpoint
+
+# 4. Verify ngrok is accessible
+curl -I https://aery.eu.ngrok.io
+
+# Expected: HTTP 200 or 302
+# If connection refused: ngrok not running
+
+# 5. Test validation endpoint
+curl -X GET "https://aery.eu.ngrok.io/webhooks/microsoft/notifications?validationToken=test123"
+
+# Expected: Plain text response "test123"
+# If error: Validation endpoint not working
+```
+
+### Common Issues
+
+**Issue: Subscription created but no notifications**
+- **Cause:** ngrok tunnel restarted with different URL
+- **Solution:** Delete and recreate subscription
+- **Prevention:** Use ngrok reserved domain (aery.eu.ngrok.io)
+
+**Issue: "Subscription validation request timed out"**
+- **Cause:** Validation endpoint not accessible or too slow
+- **Solution:** Verify ngrok is running, test validation endpoint manually
+
+**Issue: Notifications received but emails not syncing**
+- **Cause:** Queue worker not running or jobs failing
+- **Solution:** Start queue worker: `docker-compose exec app php artisan queue:work --queue=notifications,default`
+- **Check failed jobs:** `docker-compose exec app php artisan queue:failed`
+
+**Issue: "clientState validation failed" in logs**
+- **Cause:** Subscription created with different `WEBHOOK_SECRET_KEY`
+- **Solution:** Delete old subscription, ensure `WEBHOOK_SECRET_KEY` is set, create new subscription
+
+### Detailed Diagnostics
+
+For comprehensive troubleshooting, see:
+- **[docs/WEBHOOK_DIAGNOSTICS.md](WEBHOOK_DIAGNOSTICS.md)** - Complete diagnostic guide with step-by-step verification
+- **ngrok web interface:** http://127.0.0.1:4040 - View all HTTP requests
+- **Laravel logs:** `docker-compose exec app tail -f storage/logs/laravel.log | grep -i webhook`
+
+---
 
 ## Troubleshooting
 

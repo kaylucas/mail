@@ -16,6 +16,22 @@ class Kernel extends ConsoleKernel
             ->dailyAt(config('email_rules.reminder_check_time', '09:00'))
             ->withoutOverlapping()
             ->onOneServer();
+
+        // Renew webhook subscriptions expiring within 24 hours
+        // Runs daily to ensure subscriptions never expire
+        $schedule->command('subscriptions:renew --hours=24')
+            ->daily()
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // Ensure all users have webhook subscriptions
+        // Runs weekly as a safety net for failed automatic creation
+        $schedule->command('subscriptions:ensure')
+            ->weekly()
+            ->sundays()
+            ->at('02:00')
+            ->withoutOverlapping()
+            ->onOneServer();
     }
 
     /**

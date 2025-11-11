@@ -55,10 +55,11 @@ return [
         'webhook_secret' => env('WEBHOOK_SECRET_KEY'),
 
         // Subscription expiration time in minutes
-        // Maximum for mail resources: 10,080 minutes (7 days)
+        // Maximum for mail resources: 10,070 minutes (Microsoft's actual limit, not 10,080)
         // Minimum: 45 minutes (auto-bumped by Microsoft if lower)
-        // Default: 7 days (10,080 minutes) - renew earlier operationally
-        'subscription_expiration_minutes' => env('GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES', 10080),
+        // Default: ~7 days (10,070 minutes) - renew earlier operationally
+        // Note: Documentation says 10,080 but API rejects above 10,070
+        'subscription_expiration_minutes' => (int) env('GRAPH_SUBSCRIPTION_EXPIRATION_MINUTES', 10070),
 
         // Renewal threshold in hours
         // Renew subscriptions when they expire within this threshold

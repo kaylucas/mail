@@ -108,7 +108,8 @@ class ProcessWebhookNotificationJob implements ShouldQueue
                     ]);
 
                     // Fetch and store the message
-                    $email = $emailSyncService->syncSingleMessage($user, $messageId);
+                    // IMPORTANT: Pass true for isWebhookSync to trigger email rules processing
+                    $email = $emailSyncService->syncSingleMessage($user, $messageId, true);
 
                     if ($email) {
                         Log::info('Message synced successfully from webhook', [

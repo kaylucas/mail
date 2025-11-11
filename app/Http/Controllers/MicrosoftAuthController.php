@@ -252,6 +252,17 @@ class MicrosoftAuthController extends Controller
                 ]);
             }
 
+            // Ensure user has webhook subscription for real-time notifications
+            // This handles both new users and existing users who may have lost their subscription
+            if (! $user->activeEmailSubscription) {
+                \App\Jobs\CreateUserSubscriptionJob::dispatch($user);
+
+                Log::info('Subscription creation job dispatched', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                ]);
+            }
+
             // Redirect to frontend with the API token
             // The token is passed in the URL hash so it's not sent to the server
             $frontendUrl = config('app.frontend_url', 'http://localhost:5173');

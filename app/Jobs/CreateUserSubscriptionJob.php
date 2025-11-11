@@ -5,13 +5,14 @@ namespace App\Jobs;
 use App\Models\User;
 use App\Services\GraphSubscriptionService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class CreateUserSubscriptionJob implements ShouldQueue
+class CreateUserSubscriptionJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -31,6 +32,11 @@ class CreateUserSubscriptionJob implements ShouldQueue
     public int $maxExceptions = 3;
 
     /**
+     * The number of seconds after which the job's unique lock will be released.
+     */
+    public int $uniqueFor = 3600; // 1 hour
+
+    /**
      * The user to create subscription for.
      */
     protected User $user;
@@ -41,6 +47,14 @@ class CreateUserSubscriptionJob implements ShouldQueue
     public function __construct(User $user)
     {
         $this->user = $user;
+    }
+
+    /**
+     * Get the unique ID for the job.
+     */
+    public function uniqueId(): string
+    {
+        return "create-subscription-{$this->user->id}";
     }
 
     /**
