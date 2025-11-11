@@ -62,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/folders', [EmailController::class, 'folders'])->name('emails.folders');
         Route::get('/{id}', [EmailController::class, 'show'])->name('emails.show');
         Route::patch('/{id}/read', [EmailController::class, 'updateReadStatus'])->name('emails.updateReadStatus');
+        Route::post('/{id}/test-rules', [EmailController::class, 'testRules'])->name('emails.testRules');
     });
 
     // Email Rules Management Routes

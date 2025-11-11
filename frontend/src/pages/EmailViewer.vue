@@ -45,7 +45,18 @@
         <EmailHeader
           :email="email"
           @toggle-read="handleToggleRead"
+          @test-rules="testEmailRules"
           @back="goBack"
+        />
+
+        <!-- Email Rule Test Results Modal -->
+        <EmailRuleTestResults
+          :show="showTestResults"
+          :results="testResults"
+          :loading="testingRules"
+          :error="testError"
+          @close="showTestResults = false"
+          @retest="handleRetest"
         />
 
         <!-- Email Body Container -->
@@ -79,6 +90,7 @@ import AppLayout from '../layouts/AppLayout.vue'
 import EmailHeader from '../components/EmailHeader.vue'
 import EmailBody from '../components/EmailBody.vue'
 import EmailAttachments from '../components/EmailAttachments.vue'
+import EmailRuleTestResults from '../components/EmailRuleTestResults.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -86,6 +98,12 @@ const router = useRouter()
 const email = ref(null)
 const loading = ref(true)
 const error = ref(null)
+
+// Rule testing state
+const showTestResults = ref(false)
+const testResults = ref(null)
+const testingRules = ref(false)
+const testError = ref(null)
 
 /**
  * Fetch email details from the API
@@ -171,6 +189,50 @@ const goBack = () => {
     // Default to emails list
     router.push({ name: 'Emails' })
   }
+}
+
+/**
+ * Test email rules in dry-run mode
+ */
+const testEmailRules = async () => {
+  try {
+    testingRules.value = true
+    testError.value = null
+    testResults.value = null
+    showTestResults.value = true
+
+    const emailId = route.params.id
+    if (!emailId) {
+      throw new Error('Email ID is required')
+    }
+
+    const response = await axios.post(`/api/emails/${emailId}/test-rules`)
+    testResults.value = response.data.data
+
+    console.log('Rule test results:', testResults.value)
+  } catch (err) {
+    if (err.response?.status === 404) {
+      testError.value = 'Email not found.'
+    } else if (err.response?.status === 401) {
+      testError.value = 'You are not authorized to test rules on this email.'
+    } else if (err.response?.data?.message === 'No active rules to test') {
+      testError.value = 'You don\'t have any active rules to test against this email.'
+    } else if (!err.response) {
+      testError.value = 'Network error. Please check your connection and try again.'
+    } else {
+      testError.value = err.response?.data?.error || err.message || 'Failed to test rules. Please try again.'
+    }
+    console.error('Failed to test email rules:', err)
+  } finally {
+    testingRules.value = false
+  }
+}
+
+/**
+ * Handle retest request from modal
+ */
+const handleRetest = () => {
+  testEmailRules()
 }
 
 onMounted(() => {

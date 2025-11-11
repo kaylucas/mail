@@ -75,6 +75,16 @@
           {{ email.is_read ? 'Mark Unread' : 'Mark Read' }}
         </button>
 
+        <!-- Test Rules Button -->
+        <button
+          @click="$emit('test-rules')"
+          class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg transition-all duration-150 shadow-sm hover:shadow hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          title="Test which rules would match this email"
+        >
+          <BeakerIcon class="h-5 w-5" />
+          Test Rules
+        </button>
+
         <!-- Reply Button (UI only) -->
         <button
           disabled
@@ -114,7 +124,7 @@
 </template>
 
 <script setup>
-import { ArrowLeftIcon, EnvelopeIcon, EnvelopeOpenIcon, ArrowUturnLeftIcon, ArrowUturnRightIcon, ExclamationCircleIcon } from '@heroicons/vue/24/outline'
+import { ArrowLeftIcon, EnvelopeIcon, EnvelopeOpenIcon, ArrowUturnLeftIcon, ArrowUturnRightIcon, ExclamationCircleIcon, BeakerIcon } from '@heroicons/vue/24/outline'
 import { formatFullDateTime, getInitials } from '../utils/dateFormat'
 
 /**
@@ -143,9 +153,10 @@ const props = defineProps({
  * Component emits
  * @event toggle-read - Emitted when read status should be toggled
  * @param {boolean} isRead - New read status
+ * @event test-rules - Emitted when test rules button is clicked
  * @event back - Emitted when back button is clicked
  */
-const emit = defineEmits(['toggle-read', 'back'])
+const emit = defineEmits(['toggle-read', 'test-rules', 'back'])
 
 /**
  * Format date/time for display

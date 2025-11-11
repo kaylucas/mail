@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Email;
+use App\Services\EmailRuleEvaluator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -249,6 +250,79 @@ class EmailController extends Controller
             return response()->json([
                 'message' => 'Failed to retrieve email statistics',
                 'error' => $this->sanitizeErrorMessage($e->getMessage()),
+            ], 500);
+        }
+    }
+
+    /**
+     * Test email rules without executing actions (dry-run mode).
+     */
+    public function testRules(Request $request, int $id, EmailRuleEvaluator $evaluator): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+
+            // Load email with user relationship and active rules
+            $email = Email::where('user_id', $user->id)
+                ->where('id', $id)
+                ->with('user.activeEmailRules.actions')
+                ->first();
+
+            if (! $email) {
+                return response()->json([
+                    'message' => 'Email not found',
+                ], 404);
+            }
+
+            // Check if user has any active rules
+            if ($email->user->activeEmailRules->isEmpty()) {
+                return response()->json([
+                    'message' => 'No active rules to test',
+                    'data' => [
+                        'email_id' => $email->id,
+                        'rules_evaluated' => 0,
+                        'matched_rules' => [],
+                        'non_matched_rules' => [],
+                        'ai_classification' => [
+                            'is_automated' => null,
+                            'needs_response' => null,
+                        ],
+                        'execution_time_ms' => 0,
+                    ],
+                ], 200);
+            }
+
+            // Test rules without executing actions
+            $results = $evaluator->testRulesForEmail($email);
+
+            Log::info('Email rules tested', [
+                'user_id' => $user->id,
+                'email_id' => $email->id,
+                'matched_count' => count($results['matched_rules']),
+                'execution_time_ms' => $results['execution_time_ms'],
+            ]);
+
+            return response()->json([
+                'message' => 'Rules tested successfully',
+                'data' => $results,
+            ], 200);
+
+        } catch (\Exception $e) {
+            // Log FULL error details for debugging
+            Log::error('Failed to test email rules - Full Details', [
+                'user_id' => auth()->id(),
+                'email_id' => $id,
+                'error_message' => $e->getMessage(),  // Full unsanitized message
+                'error_class' => get_class($e),
+                'trace' => app()->environment('local') ? $e->getTraceAsString() : 'Stack trace hidden in production',
+            ]);
+
+            // Return appropriate message based on environment
+            return response()->json([
+                'message' => 'Failed to test email rules',
+                'error' => app()->environment('local')
+                    ? $e->getMessage()  // Show full error in local environment
+                    : 'An error occurred while evaluating rules. Please check the logs for details.',
             ], 500);
         }
     }

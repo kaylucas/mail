@@ -1,0 +1,25 @@
+# Development override - enables live code updates without rebuilds
+services:
+  app:
+    volumes:
+      # Mount the entire application directory for live code updates
+      - .:/var/www/html
+      # Exclude directories that should remain in the container
+      - /var/www/html/vendor
+      - /var/www/html/node_modules
+      - /var/www/html/public/build
+    environment:
+      # Add the Anthropic API key (will be read from host .env file)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
+  queue:
+    volumes:
+      # Mount the entire application directory for live code updates
+      - .:/var/www/html
+      # Exclude directories that should remain in the container
+      - /var/www/html/vendor
+      - /var/www/html/node_modules
+      - /var/www/html/public/build
+    environment:
+      # Add the Anthropic API key (will be read from host .env file)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
