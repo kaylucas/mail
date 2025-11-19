@@ -23,6 +23,62 @@ class EmailSyncService
     }
 
     /**
+     * Ensure the Office365 connection has a valid, non-expired access token.
+     *
+     * This method checks if the token is expired or about to expire (within 5 minutes),
+     * and refreshes it if necessary. It properly handles Laravel's encrypted attribute
+     * caching by fetching a fresh connection instance after the refresh.
+     *
+     * @param  User  $user  The user whose connection to refresh
+     * @return \App\Models\Office365Connection Fresh connection with valid access token
+     *
+     * @throws \Exception If no active connection found or refresh fails
+     */
+    private function ensureFreshAccessToken(User $user): \App\Models\Office365Connection
+    {
+        $connection = $user->office365Connection;
+        if (! $connection || ! $connection->is_active) {
+            throw new \Exception("No active Office365 connection found for user {$user->id}");
+        }
+
+        // Check if token is expired or about to expire (5-minute buffer)
+        $expiresAt = $connection->token_expires_at;
+        $isExpiredOrExpiringSoon = ! $expiresAt || $expiresAt->isPast() || $expiresAt->diffInMinutes(now(), false) <= 5;
+
+        if ($isExpiredOrExpiringSoon) {
+            Log::info('Access token expired or expiring soon, refreshing', [
+                'user_id' => $user->id,
+                'connection_id' => $connection->id,
+                'expires_at' => $expiresAt?->toIso8601String(),
+                'is_expired' => ! $expiresAt || $expiresAt->isPast(),
+                'minutes_until_expiry' => $expiresAt?->diffInMinutes(now(), false),
+            ]);
+
+            // Refresh the token
+            $tokenData = $this->office365Service->refreshAccessToken($connection);
+
+            // Update the connection with new tokens
+            $connection->update([
+                'access_token' => $tokenData['access_token'],
+                'refresh_token' => $tokenData['refresh_token'],
+                'token_expires_at' => $tokenData['expires_at'],
+            ]);
+
+            Log::info('Access token refreshed successfully', [
+                'user_id' => $user->id,
+                'connection_id' => $connection->id,
+                'new_expires_at' => $tokenData['expires_at']->toIso8601String(),
+            ]);
+
+            // CRITICAL: Fetch fresh connection from database to get the new decrypted access_token
+            // Using refresh() on the existing model doesn't always properly reload encrypted attributes
+            $connection = $user->office365Connection()->firstOrFail();
+        }
+
+        return $connection;
+    }
+
+    /**
      * Sync all mail folders from Microsoft Graph to database
      *
      * @throws \Exception
@@ -32,17 +88,8 @@ class EmailSyncService
         try {
             Log::info('Starting folder sync', ['user_id' => $user->id]);
 
-            $connection = $user->office365Connection;
-            if (! $connection || ! $connection->is_active) {
-                throw new \Exception("No active Office365 connection found for user {$user->id}");
-            }
-
-            // Check token expiration and refresh if needed
-            if ($connection->isTokenExpired()) {
-                Log::info('Access token expired, refreshing', ['user_id' => $user->id]);
-                $this->office365Service->refreshAccessToken($connection);
-                $connection->refresh();
-            }
+            // Ensure we have a fresh, valid access token
+            $connection = $this->ensureFreshAccessToken($user);
 
             $folderIds = [];
             $foldersCount = 0;
@@ -101,17 +148,8 @@ class EmailSyncService
             // Sync folders first
             $folderResult = $this->syncFolders($user);
 
-            $connection = $user->office365Connection;
-            if (! $connection || ! $connection->is_active) {
-                throw new \Exception("No active Office365 connection found for user {$user->id}");
-            }
-
-            // Check token expiration
-            if ($connection->isTokenExpired()) {
-                Log::info('Access token expired, refreshing', ['user_id' => $user->id]);
-                $this->office365Service->refreshAccessToken($connection);
-                $connection->refresh();
-            }
+            // Ensure we have a fresh, valid access token
+            $connection = $this->ensureFreshAccessToken($user);
 
             $messagesSynced = 0;
             $pagesProcessed = 0;
@@ -146,8 +184,7 @@ class EmailSyncService
 
                 if ($response->status() === 401) {
                     Log::info('Token expired during sync, refreshing and retrying', ['user_id' => $user->id]);
-                    $this->office365Service->refreshAccessToken($connection);
-                    $connection->refresh();
+                    $connection = $this->ensureFreshAccessToken($user);
 
                     $response = Http::withToken($connection->access_token)
                         ->timeout(30)
@@ -220,7 +257,7 @@ class EmailSyncService
 
                 // Verify it was saved
                 $user->refresh();
-                if (!$user->hasDeltaToken()) {
+                if (! $user->hasDeltaToken()) {
                     Log::error('Delta token failed to persist', [
                         'user_id' => $user->id,
                         'attempted_length' => strlen($deltaToken),
@@ -235,11 +272,11 @@ class EmailSyncService
                 Log::warning('No delta token received from initial sync', [
                     'user_id' => $user->id,
                     'pages_processed' => $pagesProcessed,
-                    'filter_applied' => !empty($filter),
+                    'filter_applied' => ! empty($filter),
                 ]);
 
                 // If filter was applied and no delta token, make an empty request to establish delta
-                if (!empty($filter)) {
+                if (! empty($filter)) {
                     Log::info('Making empty delta request to establish delta token', [
                         'user_id' => $user->id,
                     ]);
@@ -259,7 +296,7 @@ class EmailSyncService
                                     ->timeout(30)
                                     ->get($deltaData['@odata.nextLink']);
 
-                                if (!$response->successful()) {
+                                if (! $response->successful()) {
                                     break;
                                 }
                                 $deltaData = $response->json();
@@ -334,17 +371,8 @@ class EmailSyncService
                 throw new \Exception("No delta token found for user {$user->id}. Must run initial sync first.");
             }
 
-            $connection = $user->office365Connection;
-            if (! $connection || ! $connection->is_active) {
-                throw new \Exception("No active Office365 connection found for user {$user->id}");
-            }
-
-            // Check token expiration
-            if ($connection->isTokenExpired()) {
-                Log::info('Access token expired, refreshing', ['user_id' => $user->id]);
-                $this->office365Service->refreshAccessToken($connection);
-                $connection->refresh();
-            }
+            // Ensure we have a fresh, valid access token
+            $connection = $this->ensureFreshAccessToken($user);
 
             $messagesCreated = 0;
             $messagesUpdated = 0;
@@ -360,8 +388,7 @@ class EmailSyncService
 
                 if ($response->status() === 401) {
                     Log::info('Token expired during delta sync, refreshing and retrying', ['user_id' => $user->id]);
-                    $this->office365Service->refreshAccessToken($connection);
-                    $connection->refresh();
+                    $connection = $this->ensureFreshAccessToken($user);
 
                     $response = Http::withToken($connection->access_token)
                         ->timeout(30)
@@ -446,10 +473,8 @@ class EmailSyncService
     /**
      * Sync a single message from Microsoft Graph
      *
-     * @param User $user
-     * @param string $messageId
-     * @param bool $isWebhookSync Whether this is triggered by a webhook notification
-     * @return Email|null
+     * @param  bool  $isWebhookSync  Whether this is triggered by a webhook notification
+     *
      * @throws \Exception
      */
     public function syncSingleMessage(User $user, string $messageId, bool $isWebhookSync = false): ?Email
@@ -461,17 +486,8 @@ class EmailSyncService
                 'is_webhook_sync' => $isWebhookSync,
             ]);
 
-            $connection = $user->office365Connection;
-            if (! $connection || ! $connection->is_active) {
-                throw new \Exception("No active Office365 connection found for user {$user->id}");
-            }
-
-            // Check token expiration
-            if ($connection->isTokenExpired()) {
-                Log::info('Access token expired, refreshing', ['user_id' => $user->id]);
-                $this->office365Service->refreshAccessToken($connection);
-                $connection->refresh();
-            }
+            // Ensure we have a fresh, valid access token (with 5-minute buffer)
+            $connection = $this->ensureFreshAccessToken($user);
 
             $url = "https://graph.microsoft.com/v1.0/me/messages/{$messageId}?";
             $url .= '$select=id,subject,body,bodyPreview,from,toRecipients,ccRecipients,bccRecipients,replyTo,sender,receivedDateTime,sentDateTime,hasAttachments,isRead,isDraft,importance,flag,categories,conversationId,internetMessageId,webLink,parentFolderId';
@@ -516,10 +532,7 @@ class EmailSyncService
     /**
      * Parse Graph API message data and store/update in database
      *
-     * @param User $user
-     * @param array $messageData
-     * @param bool $isWebhookSync Whether this email is being synced from a webhook notification (triggers rules)
-     * @return Email
+     * @param  bool  $isWebhookSync  Whether this email is being synced from a webhook notification (triggers rules)
      */
     private function storeMessage(User $user, array $messageData, bool $isWebhookSync = false): Email
     {

@@ -3,22 +3,22 @@
     <!-- HTML Content -->
     <div
       v-if="contentType === 'html' && sanitizedHtml"
-      class="email-body-html prose prose-lg max-w-none"
+      class="email-body-html prose prose-lg max-w-none dark:prose-invert"
       v-html="sanitizedHtml"
     ></div>
 
     <!-- Plain Text Content -->
     <div
       v-else-if="contentType === 'text' && htmlContent"
-      class="email-body-text whitespace-pre-wrap text-gray-800 bg-gray-50 rounded-lg p-6 border border-gray-200"
+      class="email-body-text whitespace-pre-wrap text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700"
     >{{ htmlContent }}</div>
 
     <!-- No Content -->
     <div v-else class="text-center py-16">
-      <svg class="h-16 w-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg class="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
-      <p class="text-gray-500 text-sm font-medium">No content available</p>
+      <p class="text-gray-500 dark:text-gray-400 text-sm font-medium">No content available</p>
     </div>
   </div>
 </template>
@@ -135,6 +135,10 @@ const sanitizedHtml = computed(() => {
   font-size: 1rem;
 }
 
+:global(.dark) .email-body-html {
+  color: #e5e7eb;
+}
+
 /* Plain text email styling */
 .email-body-text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -163,9 +167,17 @@ const sanitizedHtml = computed(() => {
   transition: color 150ms ease-in-out;
 }
 
+:global(.dark) .email-body-html :deep(a) {
+  color: #818cf8;
+}
+
 .email-body-html :deep(a:hover) {
   color: #3730a3;
   text-decoration-thickness: 2px;
+}
+
+:global(.dark) .email-body-html :deep(a:hover) {
+  color: #a5b4fc;
 }
 
 .email-body-html :deep(strong),
@@ -247,6 +259,11 @@ const sanitizedHtml = computed(() => {
   color: #374151;
 }
 
+:global(.dark) .email-body-html :deep(blockquote) {
+  border-left-color: #4b5563;
+  color: #9ca3af;
+}
+
 .email-body-html :deep(pre) {
   background-color: #1f2937;
   color: #f9fafb;
@@ -259,6 +276,11 @@ const sanitizedHtml = computed(() => {
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
 }
 
+:global(.dark) .email-body-html :deep(pre) {
+  background-color: #111827;
+  border-color: #374151;
+}
+
 .email-body-html :deep(code) {
   background-color: #f3f4f6;
   border-radius: 0.25rem;
@@ -267,6 +289,11 @@ const sanitizedHtml = computed(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   color: #db2777;
   font-weight: 500;
+}
+
+:global(.dark) .email-body-html :deep(code) {
+  background-color: #374151;
+  color: #f472b6;
 }
 
 .email-body-html :deep(pre code) {
@@ -289,9 +316,18 @@ const sanitizedHtml = computed(() => {
   font-weight: 600;
 }
 
+:global(.dark) .email-body-html :deep(th) {
+  background-color: #374151;
+  border-color: #4b5563;
+}
+
 .email-body-html :deep(td) {
   border: 1px solid #d1d5db;
   padding: 0.5rem 1rem;
+}
+
+:global(.dark) .email-body-html :deep(td) {
+  border-color: #4b5563;
 }
 
 .email-body-html :deep(img) {
@@ -307,6 +343,10 @@ const sanitizedHtml = computed(() => {
   margin-top: 1.5rem;
   margin-bottom: 1.5rem;
   border-color: #d1d5db;
+}
+
+:global(.dark) .email-body-html :deep(hr) {
+  border-color: #4b5563;
 }
 
 /* Prevent email styles from breaking out of container */

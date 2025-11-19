@@ -17,33 +17,33 @@
     </div>
 
     <!-- Error Message -->
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-lg p-4">
+    <div v-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
       <div class="flex items-start gap-2">
-        <ExclamationCircleIcon class="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+        <ExclamationCircleIcon class="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
         <div class="flex-1">
-          <p class="text-sm text-red-800">{{ error }}</p>
+          <p class="text-sm text-red-800 dark:text-red-200">{{ error }}</p>
         </div>
       </div>
     </div>
 
     <!-- Loading State -->
     <div v-if="loading && rules.length === 0" class="space-y-3">
-      <div v-for="i in 3" :key="i" class="bg-white border border-gray-200 rounded-lg p-4 animate-pulse">
+      <div v-for="i in 3" :key="i" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 animate-pulse">
         <div class="flex items-center justify-between">
           <div class="flex-1 space-y-3">
-            <div class="h-4 bg-gray-200 rounded w-1/4"></div>
-            <div class="h-3 bg-gray-200 rounded w-1/2"></div>
+            <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+            <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
           </div>
-          <div class="h-6 w-12 bg-gray-200 rounded"></div>
+          <div class="h-6 w-12 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
       </div>
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="isEmpty" class="bg-white border border-gray-200 rounded-lg p-8 text-center">
-      <SparklesIcon class="h-12 w-12 text-gray-400 mx-auto mb-4" />
-      <h3 class="text-lg font-medium text-gray-900 mb-2">No email rules yet</h3>
-      <p class="text-sm text-gray-600 mb-4">
+    <div v-else-if="isEmpty" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center transition-colors">
+      <SparklesIcon class="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+      <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">No email rules yet</h3>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
         Create your first AI-powered rule to automatically process your emails
       </p>
       <button
@@ -60,7 +60,7 @@
       <div
         v-for="rule in rules"
         :key="rule.id"
-        class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
       >
         <div class="flex items-start gap-4">
           <!-- Active Toggle -->
@@ -69,7 +69,7 @@
               @click="handleToggleRule(rule.id)"
               :class="[
                 'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-                rule.is_active ? 'bg-indigo-600' : 'bg-gray-200'
+                rule.is_active ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
               ]"
               role="switch"
               :aria-checked="rule.is_active"
@@ -87,16 +87,16 @@
           <div class="flex-1 min-w-0">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
-                <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <h3 class="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                   {{ rule.name }}
                   <span
                     v-if="!rule.is_active"
-                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600"
+                    class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
                   >
                     Inactive
                   </span>
                 </h3>
-                <p v-if="rule.description" class="text-sm text-gray-600 mt-1">
+                <p v-if="rule.description" class="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {{ rule.description }}
                 </p>
               </div>
@@ -105,14 +105,14 @@
               <div class="flex items-center gap-2">
                 <button
                   @click="handleEditRule(rule)"
-                  class="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                  class="p-1.5 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
                   title="Edit rule"
                 >
                   <PencilIcon class="h-5 w-5" />
                 </button>
                 <button
                   @click="handleDeleteRule(rule)"
-                  class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                  class="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                   title="Delete rule"
                 >
                   <TrashIcon class="h-5 w-5" />
@@ -121,7 +121,7 @@
             </div>
 
             <!-- Rule Stats -->
-            <div class="flex items-center gap-4 mt-3 text-xs text-gray-500">
+            <div class="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">
               <span class="flex items-center gap-1">
                 <BoltIcon class="h-4 w-4" />
                 Priority: {{ rule.priority || 0 }}
@@ -140,19 +140,19 @@
             <div v-if="hasConditions(rule)" class="mt-3 flex flex-wrap gap-2">
               <span
                 v-if="rule.simple_conditions?.from"
-                class="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
+                class="inline-flex items-center px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded"
               >
                 From: {{ rule.simple_conditions.from }}
               </span>
               <span
                 v-if="rule.simple_conditions?.to"
-                class="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
+                class="inline-flex items-center px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded"
               >
                 To: {{ rule.simple_conditions.to }}
               </span>
               <span
                 v-if="rule.simple_conditions?.subject"
-                class="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
+                class="inline-flex items-center px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded"
               >
                 Subject: {{ rule.simple_conditions.subject }}
               </span>

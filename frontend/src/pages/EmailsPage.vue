@@ -5,11 +5,11 @@
       <EmailSyncIndicator />
 
       <!-- Header -->
-      <header class="bg-white border-b border-gray-200 px-6 py-4">
+      <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-6 py-4 transition-colors">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
           <div>
-            <h1 class="text-2xl font-bold text-gray-900">Inbox</h1>
-            <p class="text-sm text-gray-600 mt-1">Manage your emails</p>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Inbox</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Manage your emails</p>
           </div>
           <button
             @click="refreshEmails"

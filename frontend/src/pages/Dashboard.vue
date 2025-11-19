@@ -107,31 +107,31 @@ onMounted(() => {
         </div>
 
         <!-- Welcome Section -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <h2 class="text-xl font-semibold text-gray-900 mb-2">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 transition-colors">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Welcome back, {{ user?.name }}!
           </h2>
-          <p class="text-gray-600">
+          <p class="text-gray-600 dark:text-gray-300">
             Manage your Microsoft 365 connection and settings.
           </p>
         </div>
 
         <!-- Connection Status Card -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Microsoft 365 Connection</h3>
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 transition-colors">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Microsoft 365 Connection</h3>
 
           <!-- Connected and Valid -->
           <div v-if="isConnected && !isTokenExpired" class="space-y-4">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex-shrink-0 w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
               </div>
               <div class="flex-1">
-                <p class="text-sm font-medium text-gray-900">Connected to Microsoft 365</p>
-                <p class="text-sm text-gray-500 mt-1">{{ user?.email }}</p>
-                <p v-if="connection?.token_expires_at" class="text-xs text-gray-400 mt-1">
+                <p class="text-sm font-medium text-gray-900 dark:text-white">Connected to Microsoft 365</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ user?.email }}</p>
+                <p v-if="connection?.token_expires_at" class="text-xs text-gray-400 dark:text-gray-500 mt-1">
                   Token expires: {{ new Date(connection.token_expires_at).toLocaleString() }}
                 </p>
               </div>
@@ -139,13 +139,13 @@ onMounted(() => {
             <div class="flex gap-3 mt-4">
               <button
                 @click="reconnectMicrosoft"
-                class="px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition"
+                class="px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition"
               >
                 Reconnect
               </button>
               <button
                 @click="deleteConnection"
-                class="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition"
+                class="px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition"
               >
                 Disconnect
               </button>
@@ -155,19 +155,19 @@ onMounted(() => {
           <!-- Connected but Expired -->
           <div v-else-if="isConnected && isTokenExpired" class="space-y-4">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex-shrink-0 w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                 </svg>
               </div>
               <div class="flex-1">
-                <p class="text-sm font-medium text-gray-900">Connection expired</p>
-                <p class="text-sm text-gray-500 mt-1">Your Microsoft 365 token has expired. Please reconnect.</p>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">Connection expired</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Your Microsoft 365 token has expired. Please reconnect.</p>
               </div>
             </div>
             <button
               @click="reconnectMicrosoft"
-              class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition"
+              class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition rounded-lg"
             >
               Reconnect
             </button>
@@ -176,19 +176,19 @@ onMounted(() => {
           <!-- Not Connected -->
           <div v-else class="space-y-4">
             <div class="flex items-start gap-3">
-              <div class="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div class="flex-shrink-0 w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
               </div>
               <div class="flex-1">
-                <p class="text-sm font-medium text-gray-900">Not connected</p>
-                <p class="text-sm text-gray-500 mt-1">Connect your Microsoft 365 account to get started.</p>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">Not connected</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Connect your Microsoft 365 account to get started.</p>
               </div>
             </div>
             <button
               @click="reconnectMicrosoft"
-              class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition"
+              class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition rounded-lg"
             >
               Connect to Microsoft 365
             </button>

@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white border-b border-gray-200 p-4">
+  <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 p-4 transition-colors">
     <div class="max-w-7xl mx-auto">
       <!-- Top row: Search and main filters -->
       <div class="flex flex-col sm:flex-row gap-3 mb-3">
@@ -10,13 +10,13 @@
             v-model="searchQuery"
             type="text"
             placeholder="Search emails..."
-            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
             @input="handleSearchInput"
           />
           <button
             v-if="searchQuery"
             @click="clearSearch"
-            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <XMarkIcon class="h-5 w-5" />
           </button>
@@ -24,9 +24,9 @@
 
         <!-- Folder selector -->
         <Menu as="div" class="relative">
-          <MenuButton class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 whitespace-nowrap">
+          <MenuButton class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-2 focus:ring-blue-500 whitespace-nowrap transition-colors">
             <FolderIcon class="h-5 w-5 text-gray-400" />
-            <span class="text-sm font-medium text-gray-700">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
               {{ selectedFolderName }}
             </span>
             <ChevronDownIcon class="h-4 w-4 text-gray-400" />
@@ -39,14 +39,14 @@
             leave-from-class="transform scale-100 opacity-100"
             leave-to-class="transform scale-95 opacity-0"
           >
-            <MenuItems class="absolute right-0 mt-2 w-56 origin-top-right bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+            <MenuItems class="absolute right-0 mt-2 w-56 origin-top-right bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10 border border-gray-200 dark:border-gray-700">
               <div class="py-1">
                 <MenuItem v-slot="{ active }">
                   <button
                     @click="$emit('update:folder', null)"
                     :class="[
-                      active ? 'bg-gray-100' : '',
-                      !folder ? 'font-semibold text-blue-600' : 'text-gray-700',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                      !folder ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-200',
                       'block w-full text-left px-4 py-2 text-sm'
                     ]"
                   >
@@ -57,13 +57,13 @@
                   <button
                     @click="$emit('update:folder', f.id)"
                     :class="[
-                      active ? 'bg-gray-100' : '',
-                      folder === f.id ? 'font-semibold text-blue-600' : 'text-gray-700',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                      folder === f.id ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-200',
                       'block w-full text-left px-4 py-2 text-sm flex items-center justify-between'
                     ]"
                   >
                     <span>{{ f.display_name }}</span>
-                    <span v-if="f.unread_item_count > 0" class="text-xs font-semibold text-blue-600">
+                    <span v-if="f.unread_item_count > 0" class="text-xs font-semibold text-blue-600 dark:text-blue-400">
                       {{ f.unread_item_count }}
                     </span>
                   </button>
@@ -75,8 +75,8 @@
 
         <!-- Sort selector -->
         <Menu as="div" class="relative">
-          <MenuButton class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 whitespace-nowrap">
-            <span class="text-sm font-medium text-gray-700">
+          <MenuButton class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-2 focus:ring-blue-500 whitespace-nowrap transition-colors">
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
               {{ sortLabel }}
             </span>
             <ChevronDownIcon class="h-4 w-4 text-gray-400" />
@@ -89,14 +89,14 @@
             leave-from-class="transform scale-100 opacity-100"
             leave-to-class="transform scale-95 opacity-0"
           >
-            <MenuItems class="absolute right-0 mt-2 w-48 origin-top-right bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+            <MenuItems class="absolute right-0 mt-2 w-48 origin-top-right bg-white dark:bg-gray-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-10 border border-gray-200 dark:border-gray-700">
               <div class="py-1">
                 <MenuItem v-for="option in sortOptions" :key="option.value" v-slot="{ active }">
                   <button
                     @click="$emit('update:sortBy', option.value)"
                     :class="[
-                      active ? 'bg-gray-100' : '',
-                      sortBy === option.value ? 'font-semibold text-blue-600' : 'text-gray-700',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                      sortBy === option.value ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-200',
                       'block w-full text-left px-4 py-2 text-sm'
                     ]"
                   >
@@ -111,11 +111,11 @@
         <!-- Sort order toggle -->
         <button
           @click="$emit('toggle-sort-order')"
-          class="inline-flex items-center justify-center px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
+          class="inline-flex items-center justify-center px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-2 focus:ring-blue-500 transition-colors"
           :title="sortOrder === 'desc' ? 'Newest first' : 'Oldest first'"
         >
-          <ArrowUpIcon v-if="sortOrder === 'asc'" class="h-5 w-5 text-gray-600" />
-          <ArrowDownIcon v-else class="h-5 w-5 text-gray-600" />
+          <ArrowUpIcon v-if="sortOrder === 'asc'" class="h-5 w-5 text-gray-600 dark:text-gray-400" />
+          <ArrowDownIcon v-else class="h-5 w-5 text-gray-600 dark:text-gray-400" />
         </button>
       </div>
 
@@ -128,8 +128,8 @@
           @click="$emit('update:isRead', readOption.value)"
           :class="[
             isRead === readOption.value
-              ? 'bg-blue-100 text-blue-700 border-blue-200'
-              : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200',
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700',
             'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-full transition-colors'
           ]"
         >
@@ -142,8 +142,8 @@
           @click="$emit('update:hasAttachments', hasAttachments ? null : true)"
           :class="[
             hasAttachments
-              ? 'bg-blue-100 text-blue-700 border-blue-200'
-              : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200',
+              ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700',
             'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded-full transition-colors'
           ]"
         >
@@ -155,7 +155,7 @@
         <button
           v-if="hasActiveFilters"
           @click="$emit('clear-filters')"
-          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full hover:bg-red-100 transition-colors"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
         >
           <XMarkIcon class="h-4 w-4" />
           Clear Filters

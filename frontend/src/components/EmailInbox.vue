@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-screen bg-gray-50">
+  <div class="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
     <!-- Filters bar -->
     <EmailFilters
       :folder="filters.folder_id"
@@ -30,8 +30,8 @@
       <div v-else-if="hasError" class="flex items-center justify-center h-full p-8">
         <div class="text-center">
           <ExclamationCircleIcon class="mx-auto h-12 w-12 text-red-500 mb-4" />
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">Failed to load emails</h3>
-          <p class="text-sm text-gray-600 mb-4">{{ error }}</p>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Failed to load emails</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">{{ error }}</p>
           <button
             @click="refresh"
             class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -45,11 +45,11 @@
       <!-- Empty state -->
       <div v-else-if="isEmpty" class="flex items-center justify-center h-full p-8">
         <div class="text-center">
-          <InboxIcon class="mx-auto h-16 w-16 text-gray-400 mb-4" />
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">
+          <InboxIcon class="mx-auto h-16 w-16 text-gray-400 dark:text-gray-600 mb-4" />
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             {{ hasActiveFilters ? 'No emails found' : 'Your inbox is empty' }}
           </h3>
-          <p class="text-sm text-gray-600 mb-4">
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {{ hasActiveFilters
               ? 'Try adjusting your filters or search query'
               : 'When you receive emails, they will appear here'
@@ -93,14 +93,14 @@
 
         <!-- Loading indicator for infinite scroll -->
         <div v-if="isLoading && emails.length > 0" class="py-4">
-          <div class="flex items-center justify-center gap-2 text-sm text-gray-600">
+          <div class="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <ArrowPathIcon class="h-5 w-5 animate-spin" />
             <span>Loading more emails...</span>
           </div>
         </div>
 
         <!-- End of list indicator -->
-        <div v-if="!canLoadMore && emails.length > 0" class="py-4 text-center text-sm text-gray-500">
+        <div v-if="!canLoadMore && emails.length > 0" class="py-4 text-center text-sm text-gray-500 dark:text-gray-500">
           No more emails to load
         </div>
       </div>

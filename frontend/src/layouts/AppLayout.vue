@@ -1,5 +1,5 @@
 <template>
-  <div class="h-screen flex overflow-hidden bg-gray-50">
+  <div class="h-screen flex overflow-hidden bg-gray-50 dark:bg-gray-900">
     <!-- Mobile menu button -->
     <div class="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
       <button

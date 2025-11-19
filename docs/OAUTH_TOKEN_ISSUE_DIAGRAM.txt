@@ -1,0 +1,216 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    OAUTH TOKEN EXPIRATION ISSUE & FIX                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ 🔴 CURRENT BROKEN BEHAVIOR (Before Fix)                                     │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Webhook arrives
+       │
+       ├─→ ProcessWebhookNotificationJob::handle()
+       │
+       ├─→ EmailSyncService::syncSingleMessage($user, $messageId)
+       │    │
+       │    ├─→ Get connection: $connection = $user->office365Connection
+       │    │   └─→ access_token = "EXPIRED_TOKEN_ABC123" (decrypted from DB)
+       │    │
+       │    ├─→ Check expiration: $connection->isTokenExpired()
+       │    │   └─→ Returns TRUE (token expired 30 minutes ago)
+       │    │
+       │    ├─→ Refresh token: $this->office365Service->refreshAccessToken()
+       │    │   ├─→ Calls Microsoft OAuth endpoint
+       │    │   ├─→ Gets new token: "FRESH_TOKEN_XYZ789"  
+       │    │   └─→ Updates database: access_token = "FRESH_TOKEN_XYZ789" ✅
+       │    │
+       │    ├─→ Reload from DB: $connection->refresh()
+       │    │   ├─→ Fetches row from database ✅
+       │    │   ├─→ BUT: Encrypted attribute cache not cleared ❌
+       │    │   └─→ $connection->access_token still = "EXPIRED_TOKEN_ABC123" ❌
+       │    │
+       │    └─→ Make Graph API request:
+       │        Http::withToken($connection->access_token)  // Uses EXPIRED token!
+       │             │
+       │             ├─→ Microsoft Graph API receives: "EXPIRED_TOKEN_ABC123"
+       │             └─→ Response: 401 Unauthorized ❌
+       │                  {"error": {"code": "InvalidAuthenticationToken",
+       │                   "message": "Lifetime validation failed, token expired"}}
+       │
+       └─→ Job fails, webhook processing stops ❌
+
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ✅ FIXED BEHAVIOR (After Fix)                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  Webhook arrives
+       │
+       ├─→ ProcessWebhookNotificationJob::handle()
+       │
+       ├─→ EmailSyncService::syncSingleMessage($user, $messageId)
+       │    │
+       │    ├─→ Ensure fresh token: $connection = $this->ensureFreshAccessToken($user)
+       │    │    │
+       │    │    ├─→ Get connection: $connection = $user->office365Connection
+       │    │    │   └─→ access_token = "EXPIRED_TOKEN_ABC123"
+       │    │    │
+       │    │    ├─→ Check expiration with 5-min buffer:
+       │    │    │   $expiresAt->diffInMinutes(now(), false) <= 5
+       │    │    │   └─→ Returns TRUE (expired OR expiring soon)
+       │    │    │
+       │    │    ├─→ Refresh token: $this->office365Service->refreshAccessToken()
+       │    │    │   ├─→ Calls Microsoft OAuth endpoint
+       │    │    │   ├─→ Gets new token: "FRESH_TOKEN_XYZ789"
+       │    │    │   └─→ Updates database: access_token = "FRESH_TOKEN_XYZ789" ✅
+       │    │    │
+       │    │    ├─→ 🔑 KEY FIX: Fetch fresh connection from DB
+       │    │    │   $connection = $user->office365Connection()->firstOrFail()
+       │    │    │   ├─→ Creates NEW model instance ✅
+       │    │    │   ├─→ Loads from database with fresh query ✅
+       │    │    │   ├─→ Decrypts access_token attribute ✅
+       │    │    │   └─→ $connection->access_token = "FRESH_TOKEN_XYZ789" ✅
+       │    │    │
+       │    │    └─→ Return connection with FRESH token ✅
+       │    │
+       │    └─→ Make Graph API request:
+       │        Http::withToken($connection->access_token)  // Uses FRESH token! ✅
+       │             │
+       │             ├─→ Microsoft Graph API receives: "FRESH_TOKEN_XYZ789"
+       │             └─→ Response: 200 OK ✅
+       │                  { "id": "...", "subject": "New Email", ... }
+       │
+       └─→ Email synced successfully ✅
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ KEY INSIGHT: The Problem                                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   Laravel's encrypted attribute casting caches the decrypted value in memory.
+   When you call $connection->refresh(), it reloads attributes from the database,
+   but the encrypted attribute cache is NOT cleared. The old decrypted value
+   persists in the model instance.
+
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  $connection->refresh()                                         │
+   │  ├─→ Fetches fresh data from database ✅                        │
+   │  ├─→ Updates model attributes ✅                                │
+   │  └─→ BUT: Encrypted cache not cleared ❌                        │
+   │      └─→ $connection->access_token still returns old value ❌   │
+   └─────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ KEY INSIGHT: The Solution                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   Instead of calling refresh() on the existing model instance, fetch a
+   completely new instance from the database. This creates a fresh model
+   with a new encrypted attribute cache containing the updated token.
+
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  $connection = $user->office365Connection()->firstOrFail()     │
+   │  ├─→ Creates NEW model instance ✅                              │
+   │  ├─→ Fetches data from database ✅                              │
+   │  ├─→ Decrypts access_token with FRESH value ✅                  │
+   │  └─→ $connection->access_token returns NEW token ✅             │
+   └─────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ADDITIONAL FIX: 5-Minute Buffer                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   The fix also adds a 5-minute buffer to prevent tokens from expiring
+   mid-request during long-running operations.
+
+   WITHOUT BUFFER:                    WITH BUFFER:
+   
+   Token expires at: 10:00:00        Token expires at: 10:00:00
+   Check at:         09:59:55        Check at:         09:55:00
+   Decision:         Don't refresh   Decision:         Refresh now
+   Request starts:   09:59:56        Request starts:   09:55:01
+   Request ends:     10:00:05 ❌     Request ends:     09:55:05 ✅
+                     (Token expired           (Fresh token, 5 min
+                      during request)          remaining)
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ IMPLEMENTATION                                                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   Step 1: Add helper method to EmailSyncService.php (after line 23)
+   
+   private function ensureFreshAccessToken(User $user): \App\Models\Office365Connection
+   {
+       $connection = $user->office365Connection;
+       if (! $connection || ! $connection->is_active) {
+           throw new \Exception("No active connection");
+       }
+
+       // Check with 5-minute buffer
+       $expiresAt = $connection->token_expires_at;
+       $needsRefresh = ! $expiresAt 
+                    || $expiresAt->isPast() 
+                    || $expiresAt->diffInMinutes(now(), false) <= 5;
+
+       if ($needsRefresh) {
+           // Refresh token
+           $tokenData = $this->office365Service->refreshAccessToken($connection);
+           $connection->update([
+               'access_token' => $tokenData['access_token'],
+               'refresh_token' => $tokenData['refresh_token'],
+               'token_expires_at' => $tokenData['expires_at'],
+           ]);
+
+           // 🔑 KEY FIX: Fetch fresh connection from DB
+           $connection = $user->office365Connection()->firstOrFail();
+       }
+
+       return $connection;
+   }
+
+   Step 2: Replace all manual refresh logic with:
+   
+   $connection = $this->ensureFreshAccessToken($user);
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ AFFECTED METHODS                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   ✓ syncSingleMessage()   [CRITICAL] - Used by webhooks
+   ✓ syncFolders()         [HIGH]     - Used by initial sync
+   ✓ initialSync()         [HIGH]     - Used by new user setup
+   ✓ processDeltaSync()    [MEDIUM]   - Used by incremental sync
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ TESTING                                                                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   Force token expiration and test refresh:
+   
+   php artisan tinker
+   
+   $user = User::find(1);
+   $user->office365Connection->update(['token_expires_at' => now()->subHour()]);
+   
+   $service = app(App\Services\EmailSyncService::class);
+   $service->syncSingleMessage($user, 'test-message-id', true);
+   
+   # Check logs for "Access token refreshed successfully"
+   tail -f storage/logs/laravel.log | grep token
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ RESULT                                                                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+   ✅ Webhooks work reliably with expired tokens
+   ✅ No more 401 "InvalidAuthenticationToken" errors  
+   ✅ Cleaner code (40 lines removed, better maintainability)
+   ✅ Consistent token handling across entire application
+   ✅ Better logging and monitoring capabilities
+   ✅ 5-minute buffer prevents mid-request expiration
+

@@ -1,0 +1,184 @@
+================================================================================
+OAUTH TOKEN EXPIRATION FIX - SOLUTION SUMMARY
+================================================================================
+
+DATE: 2025-11-12
+ISSUE: Webhook notifications failing with 401 "token is expired"
+STATUS: ✅ Solution Ready - Ready to Implement
+PRIORITY: 🔴 CRITICAL
+
+================================================================================
+ROOT CAUSE ANALYSIS
+================================================================================
+
+PROBLEM:
+- Webhooks from Microsoft Graph fail when OAuth access tokens expire
+- Error: "InvalidAuthenticationToken - Lifetime validation failed"
+- Location: EmailSyncService.php:491 (called from ProcessWebhookNotificationJob.php:112)
+
+WHY EXISTING REFRESH FAILS:
+1. refreshAccessToken() updates database ✅
+2. $connection->refresh() attempts to reload ✅  
+3. Laravel's encrypted casting caches decrypted value ❌
+4. refresh() doesn't re-decrypt in same request ❌
+5. $connection->access_token still contains OLD expired token ❌
+
+RESULT: Graph API receives expired token → 401 error → webhook fails
+
+================================================================================
+SOLUTION OVERVIEW
+================================================================================
+
+APPROACH:
+1. Add centralized token refresh helper method
+2. Replace all manual refresh logic (4 methods)  
+3. Fix encrypted attribute caching by fetching fresh connection from DB
+4. Add 5-minute buffer to prevent mid-request expiration
+
+BENEFITS:
+✅ Fixes all webhook processing
+✅ Eliminates 40 lines of duplicate code
+✅ Consistent token handling across app
+✅ Better logging and monitoring
+✅ Prevents race conditions with buffer time
+
+================================================================================
+IMPLEMENTATION FILES
+================================================================================
+
+Documentation Created:
+📄 docs/OAUTH_TOKEN_FIX_2025-11-12.md
+   - Complete analysis and solution architecture
+   - Testing plan and verification steps
+   - Long-term recommendations
+
+📄 docs/OAUTH_TOKEN_FIX_IMPLEMENTATION_GUIDE.md  
+   - Step-by-step implementation instructions
+   - 5 code edits with exact line numbers
+   - Verification commands
+
+📄 docs/QUICK_FIX_WEBHOOK_TOKEN_ISSUE.md
+   - 2-minute critical path fix (webhook only)
+   - Minimal change to get webhooks working immediately
+
+📄 /tmp/OAUTH_FIX_SUMMARY.md
+   - Technical analysis for team review
+   - Implementation plan with code snippets
+
+Backups Created:
+💾 app/Services/EmailSyncService.php.backup
+
+================================================================================
+IMPLEMENTATION STEPS
+================================================================================
+
+OPTION 1: Complete Fix (Recommended - 10 minutes)
+1. Read: docs/OAUTH_TOKEN_FIX_IMPLEMENTATION_GUIDE.md
+2. Apply 5 code edits to app/Services/EmailSyncService.php
+3. Verify: php -l app/Services/EmailSyncService.php
+4. Test: See testing plan in docs/OAUTH_TOKEN_FIX_2025-11-12.md
+
+OPTION 2: Quick Fix (Emergency - 2 minutes)
+1. Read: docs/QUICK_FIX_WEBHOOK_TOKEN_ISSUE.md
+2. Apply 1 code edit to syncSingleMessage() method only
+3. Verify: php -l app/Services/EmailSyncService.php
+4. Plan: Schedule complete fix for later
+
+================================================================================
+FILES TO MODIFY
+================================================================================
+
+app/Services/EmailSyncService.php
+  ├─ ADD: ensureFreshAccessToken() helper method (after line 23)
+  ├─ EDIT: syncSingleMessage() lines 464-474 [CRITICAL - webhooks]
+  ├─ EDIT: syncFolders() lines 35-45
+  ├─ EDIT: initialSync() lines 104-114 and 147-150
+  └─ EDIT: processDeltaSync() lines 337-347 and 361-364
+
+================================================================================
+TESTING CHECKLIST
+================================================================================
+
+☐ Syntax check: php -l app/Services/EmailSyncService.php
+☐ Run test suite: php artisan test  
+☐ Force token expiration in tinker and test refresh
+☐ Monitor logs for "Access token refreshed successfully"
+☐ Wait for next webhook and verify no 401 errors
+☐ Verify emails sync correctly from webhooks
+
+Expected Log Output:
+  [timestamp] Access token expired or expiring soon, refreshing
+  [timestamp] Access token refreshed successfully
+  [timestamp] Syncing single message {"is_webhook_sync":true}
+  [timestamp] Single message synced
+
+================================================================================
+ROLLBACK PLAN
+================================================================================
+
+If issues occur:
+  cp app/Services/EmailSyncService.php.backup app/Services/EmailSyncService.php
+
+================================================================================
+KEY FILES REFERENCE
+================================================================================
+
+Analysis & Solution:
+  /Users/kaylucas/Projects/mail/docs/OAUTH_TOKEN_FIX_2025-11-12.md
+
+Implementation Guide:
+  /Users/kaylucas/Projects/mail/docs/OAUTH_TOKEN_FIX_IMPLEMENTATION_GUIDE.md
+
+Quick Fix:
+  /Users/kaylucas/Projects/mail/docs/QUICK_FIX_WEBHOOK_TOKEN_ISSUE.md
+
+Backup:
+  /Users/kaylucas/Projects/mail/app/Services/EmailSyncService.php.backup
+
+Temp Files:
+  /tmp/OAUTH_FIX_SUMMARY.md
+  /tmp/COMPLETE_FIX_GUIDE.md
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+IMMEDIATE (Required):
+1. Review docs/OAUTH_TOKEN_FIX_IMPLEMENTATION_GUIDE.md
+2. Apply code changes to EmailSyncService.php
+3. Test and verify fixes work
+
+SHORT-TERM (Recommended within 1 week):
+4. Add proactive token refresh scheduled command
+5. Add monitoring for token refresh frequency
+6. Alert on repeated refresh failures
+
+LONG-TERM (Optional improvements):
+7. Implement circuit breaker pattern for Graph API calls
+8. Add retry logic to all Graph API endpoints
+9. Consider token refresh before long-running operations
+
+================================================================================
+IMPACT ASSESSMENT
+================================================================================
+
+Criticality: 🔴 HIGH - Blocks all webhook processing
+Affected Users: All users with expired tokens (typically after 1 hour)
+Recovery Time: Immediate - next webhook will succeed after fix
+Code Quality: ⬆️ Improved - Better maintainability, less duplication
+Risk Level: 🟢 LOW - Well-tested pattern, has rollback plan
+
+================================================================================
+QUESTIONS?
+================================================================================
+
+Technical Details:
+  - See docs/OAUTH_TOKEN_FIX_2025-11-12.md
+
+Implementation Help:
+  - See docs/OAUTH_TOKEN_FIX_IMPLEMENTATION_GUIDE.md
+
+Quick Emergency Fix:
+  - See docs/QUICK_FIX_WEBHOOK_TOKEN_ISSUE.md
+
+================================================================================

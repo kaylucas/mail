@@ -1,9 +1,9 @@
 <template>
   <Menu as="div" class="relative">
-    <MenuButton class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+    <MenuButton class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
       <!-- User Avatar -->
       <div
-        class="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md ring-2 ring-white"
+        class="flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md ring-2 ring-white dark:ring-gray-700"
         :style="{ backgroundColor: avatarColor }"
       >
         {{ initials }}
@@ -11,12 +11,12 @@
 
       <!-- User Info -->
       <div class="flex-1 text-left overflow-hidden">
-        <p class="text-sm font-semibold text-gray-900 truncate">{{ user.name }}</p>
-        <p class="text-xs text-gray-500 truncate">{{ user.email }}</p>
+        <p class="text-sm font-semibold text-gray-900 dark:text-white truncate">{{ user.name }}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ user.email }}</p>
       </div>
 
       <!-- Dropdown Icon -->
-      <ChevronDownIcon class="h-4 w-4 text-gray-400 flex-shrink-0 transition-transform duration-150" />
+      <ChevronDownIcon class="h-4 w-4 text-gray-400 dark:text-gray-500 flex-shrink-0 transition-transform duration-150" />
     </MenuButton>
 
     <transition
@@ -27,19 +27,23 @@
       leave-from-class="transform opacity-100 scale-100"
       leave-to-class="transform opacity-0 scale-95"
     >
-      <MenuItems class="absolute bottom-full left-0 mb-2 w-full origin-bottom-left rounded-lg bg-white shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none z-50 border border-gray-200">
+      <MenuItems class="absolute top-full left-0 mt-2 w-full origin-top-left rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-black ring-opacity-5 focus:outline-none z-50 border border-gray-200 dark:border-gray-700">
         <div class="py-1">
           <MenuItem v-slot="{ active }" disabled>
             <button
               :class="[
-                'w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-not-allowed transition-colors',
-                active ? 'bg-gray-50' : ''
+                'w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-400 dark:text-gray-500 cursor-not-allowed transition-colors',
+                active ? 'bg-gray-50 dark:bg-gray-700' : ''
               ]"
             >
               <UserCircleIcon class="h-5 w-5" />
               <span>Profile</span>
-              <span class="ml-auto text-xs bg-gray-100 px-2 py-0.5 rounded-full">Soon</span>
+              <span class="ml-auto text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full text-gray-500 dark:text-gray-400">Soon</span>
             </button>
+          </MenuItem>
+
+          <MenuItem v-slot="{ active }">
+            <ThemeToggle />
           </MenuItem>
 
           <MenuItem v-slot="{ active }">
@@ -47,7 +51,7 @@
               @click="navigateToSettings"
               :class="[
                 'w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors',
-                active ? 'bg-gray-50 text-gray-900' : 'text-gray-700'
+                active ? 'bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-200'
               ]"
             >
               <Cog6ToothIcon class="h-5 w-5" />
@@ -55,14 +59,14 @@
             </button>
           </MenuItem>
 
-          <div class="border-t border-gray-200 my-1"></div>
+          <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
 
           <MenuItem v-slot="{ active }">
             <button
               @click="handleLogout"
               :class="[
-                'w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 font-medium transition-colors',
-                active ? 'bg-red-50 text-red-700' : ''
+                'w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 font-medium transition-colors',
+                active ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300' : ''
               ]"
             >
               <ArrowRightOnRectangleIcon class="h-5 w-5" />
@@ -87,6 +91,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import axios from '../axios'
 import { clearAuthState } from '../router/index.js'
+import ThemeToggle from './ThemeToggle.vue'
 
 const props = defineProps({
   user: {

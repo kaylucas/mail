@@ -42,7 +42,7 @@ class ProcessWebhookNotificationJob implements ShouldQueue
     public function __construct(WebhookNotification $notification)
     {
         $this->notification = $notification;
-        $this->onQueue('notifications'); // Use separate queue for webhook processing
+        // Jobs will use the default queue
     }
 
     /**

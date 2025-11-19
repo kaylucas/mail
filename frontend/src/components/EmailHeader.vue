@@ -1,11 +1,11 @@
 <template>
-  <header class="bg-white border-b border-gray-200 shadow-sm">
+  <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm transition-colors">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <!-- Back Button Row -->
       <div class="mb-6">
         <button
           @click="$emit('back')"
-          class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-indigo-600 transition-all duration-150 hover:gap-3 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-lg px-3 py-2 -ml-3"
+          class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-150 hover:gap-3 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-lg px-3 py-2 -ml-3"
         >
           <ArrowLeftIcon class="h-5 w-5" />
           Back to Inbox
@@ -13,7 +13,7 @@
       </div>
 
       <!-- Subject Line -->
-      <h1 class="text-3xl font-bold text-gray-900 mb-6 leading-tight">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
         {{ email.subject || '(No subject)' }}
       </h1>
 
@@ -21,16 +21,16 @@
       <div class="space-y-4">
         <!-- From -->
         <div class="flex items-start gap-4">
-          <div class="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-base shadow-md ring-2 ring-white">
+          <div class="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-base shadow-md ring-2 ring-white dark:ring-gray-900">
             {{ getInitials(email.from_name) }}
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between gap-4 flex-wrap">
               <div class="min-w-0 flex-1">
-                <p class="text-base font-bold text-gray-900">{{ email.from_name }}</p>
-                <p class="text-sm text-gray-600 truncate mt-0.5">{{ email.from_email }}</p>
+                <p class="text-base font-bold text-gray-900 dark:text-white">{{ email.from_name }}</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 truncate mt-0.5">{{ email.from_email }}</p>
               </div>
-              <div class="flex-shrink-0 text-sm font-medium text-gray-500">
+              <div class="flex-shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
                 {{ formatDateTime(email.received_date_time) }}
               </div>
             </div>
@@ -41,32 +41,32 @@
         <div class="pl-16 space-y-2">
           <!-- To -->
           <div v-if="email.to_recipients" class="text-sm">
-            <span class="font-semibold text-gray-700">To:</span>
-            <span class="text-gray-600 ml-2">{{ formatRecipients(email.to_recipients) }}</span>
+            <span class="font-semibold text-gray-700 dark:text-gray-300">To:</span>
+            <span class="text-gray-600 dark:text-gray-400 ml-2">{{ formatRecipients(email.to_recipients) }}</span>
           </div>
 
           <!-- CC -->
           <div v-if="email.cc_recipients" class="text-sm">
-            <span class="font-semibold text-gray-700">Cc:</span>
-            <span class="text-gray-600 ml-2">{{ formatRecipients(email.cc_recipients) }}</span>
+            <span class="font-semibold text-gray-700 dark:text-gray-300">Cc:</span>
+            <span class="text-gray-600 dark:text-gray-400 ml-2">{{ formatRecipients(email.cc_recipients) }}</span>
           </div>
 
           <!-- BCC -->
           <div v-if="email.bcc_recipients" class="text-sm">
-            <span class="font-semibold text-gray-700">Bcc:</span>
-            <span class="text-gray-600 ml-2">{{ formatRecipients(email.bcc_recipients) }}</span>
+            <span class="font-semibold text-gray-700 dark:text-gray-300">Bcc:</span>
+            <span class="text-gray-600 dark:text-gray-400 ml-2">{{ formatRecipients(email.bcc_recipients) }}</span>
           </div>
         </div>
       </div>
 
       <!-- Action Buttons -->
-      <div class="mt-6 flex items-center gap-3 pt-6 border-t border-gray-200">
+      <div class="mt-6 flex items-center gap-3 pt-6 border-t border-gray-200 dark:border-gray-800">
         <!-- Mark as Read/Unread -->
         <button
           @click="toggleReadStatus"
           class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 shadow-sm hover:shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           :class="email.is_read
-            ? 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+            ? 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-600'
             : 'text-white bg-indigo-600 hover:bg-indigo-700'
           "
         >
@@ -78,7 +78,7 @@
         <!-- Test Rules Button -->
         <button
           @click="$emit('test-rules')"
-          class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg transition-all duration-150 shadow-sm hover:shadow hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg transition-all duration-150 shadow-sm hover:shadow hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           title="Test which rules would match this email"
         >
           <BeakerIcon class="h-5 w-5" />
@@ -88,7 +88,7 @@
         <!-- Reply Button (UI only) -->
         <button
           disabled
-          class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-400 bg-white border border-gray-200 rounded-lg cursor-not-allowed opacity-60"
+          class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-400 dark:text-gray-600 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-not-allowed opacity-60"
           title="Reply (Coming soon)"
         >
           <ArrowUturnLeftIcon class="h-5 w-5" />
@@ -98,7 +98,7 @@
         <!-- Forward Button (UI only) -->
         <button
           disabled
-          class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-400 bg-white border border-gray-200 rounded-lg cursor-not-allowed opacity-60"
+          class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-400 dark:text-gray-600 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-not-allowed opacity-60"
           title="Forward (Coming soon)"
         >
           <ArrowUturnRightIcon class="h-5 w-5" />
@@ -110,8 +110,8 @@
           <span
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm"
             :class="{
-              'bg-red-100 text-red-700 ring-1 ring-red-200': email.importance === 'high',
-              'bg-gray-100 text-gray-700 ring-1 ring-gray-200': email.importance === 'low'
+              'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-800': email.importance === 'high',
+              'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 ring-1 ring-gray-200 dark:ring-gray-700': email.importance === 'low'
             }"
           >
             <ExclamationCircleIcon v-if="email.importance === 'high'" class="h-4 w-4" />
