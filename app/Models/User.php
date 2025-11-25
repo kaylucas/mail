@@ -133,6 +133,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the email views for the user.
+     */
+    public function emailViews()
+    {
+        return $this->hasMany(EmailView::class);
+    }
+
+    /**
      * Get the email reminders for the user.
      */
     public function emailReminders()

@@ -4,6 +4,7 @@ use App\Http\Controllers\EmailController;
 use App\Http\Controllers\EmailReminderController;
 use App\Http\Controllers\EmailRuleController;
 use App\Http\Controllers\EmailSyncController;
+use App\Http\Controllers\EmailViewController;
 use App\Http\Controllers\MicrosoftAuthController;
 use App\Http\Controllers\Office365ConnectionController;
 use App\Http\Controllers\SubscriptionController;
@@ -81,5 +82,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/{id}/dismiss', [EmailReminderController::class, 'dismiss'])->name('email-reminders.dismiss');
         Route::patch('/{id}/complete', [EmailReminderController::class, 'complete'])->name('email-reminders.complete');
         Route::patch('/{id}/snooze', [EmailReminderController::class, 'snooze'])->name('email-reminders.snooze');
+    });
+
+    // Email Views Management Routes
+    Route::prefix('email-views')->group(function () {
+        Route::get('/', [EmailViewController::class, 'index'])->name('email-views.index');
+        Route::post('/', [EmailViewController::class, 'store'])->name('email-views.store');
+        Route::get('/{id}', [EmailViewController::class, 'show'])->name('email-views.show');
+        Route::put('/{id}', [EmailViewController::class, 'update'])->name('email-views.update');
+        Route::delete('/{id}', [EmailViewController::class, 'destroy'])->name('email-views.destroy');
+        Route::patch('/{id}/toggle', [EmailViewController::class, 'toggle'])->name('email-views.toggle');
+        Route::get('/{id}/emails', [EmailViewController::class, 'getEmails'])->name('email-views.emails');
     });
 });

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EmailRule;
 use App\Models\EmailRuleAction;
+use App\Models\EmailView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -109,6 +110,8 @@ class EmailRuleController extends Controller
 
             // Load actions relationship
             $rule->load('actions');
+
+            $this->createDefaultViewForRule($rule);
 
             Log::info('Email rule created', [
                 'user_id' => $user->id,
@@ -308,6 +311,8 @@ class EmailRuleController extends Controller
             $ruleName = $rule->name;
 
             // Delete rule (cascade will delete actions due to foreign key constraint)
+            $this->deleteOrphanedViewsForRule($rule);
+
             $rule->delete();
 
             Log::info('Email rule deleted', [
@@ -420,5 +425,49 @@ class EmailRuleController extends Controller
         if (! empty($rules)) {
             validator(['actions' => [['action_config' => $config]]], $rules)->validate();
         }
+    }
+
+    private function createDefaultViewForRule(EmailRule $rule): void
+    {
+        $view = EmailView::create([
+            'user_id' => $rule->user_id,
+            'name' => $rule->name,
+            'description' => $rule->description,
+            'icon' => 'folder',
+            'color' => $this->generateRandomColor(),
+            'is_visible' => true,
+            'order' => $rule->priority ?? 100,
+        ]);
+
+        $view->rules()->sync([$rule->id]);
+
+        Log::info('Default email view created for rule', [
+            'user_id' => $rule->user_id,
+            'rule_id' => $rule->id,
+            'view_id' => $view->id,
+        ]);
+    }
+
+    private function deleteOrphanedViewsForRule(EmailRule $rule): void
+    {
+        $views = $rule->views()->withCount('rules')->get();
+
+        foreach ($views as $view) {
+            if ($view->rules_count === 1) {
+                $viewId = $view->id;
+                $view->delete();
+
+                Log::info('Email view deleted due to rule removal', [
+                    'user_id' => $rule->user_id,
+                    'rule_id' => $rule->id,
+                    'view_id' => $viewId,
+                ]);
+            }
+        }
+    }
+
+    private function generateRandomColor(): string
+    {
+        return sprintf('#%06X', random_int(0, 0xFFFFFF));
     }
 }

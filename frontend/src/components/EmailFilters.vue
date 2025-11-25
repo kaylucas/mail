@@ -23,7 +23,7 @@
         </div>
 
         <!-- Folder selector -->
-        <Menu as="div" class="relative">
+        <Menu v-if="showFolderFilter" as="div" class="relative">
           <MenuButton class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-2 focus:ring-blue-500 whitespace-nowrap transition-colors">
             <FolderIcon class="h-5 w-5 text-gray-400" />
             <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -213,6 +213,10 @@ const props = defineProps({
   hasActiveFilters: {
     type: Boolean,
     default: false
+  },
+  showFolderFilter: {
+    type: Boolean,
+    default: true
   }
 })
 

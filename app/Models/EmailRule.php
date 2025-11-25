@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -52,6 +53,14 @@ class EmailRule extends Model
     public function executions(): HasMany
     {
         return $this->hasMany(EmailRuleExecution::class);
+    }
+
+    /**
+     * Get the views associated with the email rule.
+     */
+    public function views(): BelongsToMany
+    {
+        return $this->belongsToMany(EmailView::class, 'email_view_rules');
     }
 
     /**

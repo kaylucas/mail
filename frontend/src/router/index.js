@@ -6,6 +6,7 @@ import AuthCallback from '../pages/AuthCallback.vue'
 import EmailsPage from '../pages/EmailsPage.vue'
 import EmailViewer from '../pages/EmailViewer.vue'
 import Settings from '../pages/Settings.vue'
+import ViewsManagementPage from '../pages/ViewsManagementPage.vue'
 
 const routes = [
   {
@@ -42,6 +43,12 @@ const routes = [
     path: '/settings',
     name: 'Settings',
     component: Settings,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/views',
+    name: 'ViewsManagement',
+    component: ViewsManagementPage,
     meta: { requiresAuth: true }
   }
 ]

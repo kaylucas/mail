@@ -21,6 +21,9 @@ export function useEmails() {
   const perPage = ref(50)
   const total = ref(0)
 
+  // Custom fetcher for view-specific email loading
+  const customFetcher = ref(null)
+
   // Filters
   const filters = ref({
     folder_id: null,
@@ -43,30 +46,44 @@ export function useEmails() {
       loading.value = true
       error.value = null
 
-      const params = {
-        page: currentPage.value,
-        per_page: perPage.value,
-        ...filters.value
+      let response
+
+      if (customFetcher.value) {
+        response = await customFetcher.value({
+          page: currentPage.value,
+          perPage: perPage.value,
+          filters: { ...filters.value },
+          append
+        })
+      } else {
+        const params = {
+          page: currentPage.value,
+          per_page: perPage.value,
+          ...filters.value
+        }
+
+        Object.keys(params).forEach(key => {
+          if (params[key] === null || params[key] === '' || params[key] === undefined) {
+            delete params[key]
+          }
+        })
+
+        const apiResponse = await axios.get('/api/emails', { params })
+        response = apiResponse.data
       }
 
-      // Remove null/empty values
-      Object.keys(params).forEach(key => {
-        if (params[key] === null || params[key] === '' || params[key] === undefined) {
-          delete params[key]
-        }
-      })
-
-      const response = await axios.get('/api/emails', { params })
+      const responseData = response
 
       if (append) {
-        emails.value = [...emails.value, ...response.data.data]
+        emails.value = [...emails.value, ...(responseData.data || [])]
       } else {
-        emails.value = response.data.data
+        emails.value = responseData.data || []
       }
 
-      // Update pagination info
-      total.value = response.data.total || response.data.data.length
-      hasMore.value = response.data.current_page < response.data.last_page
+      total.value = responseData.total || emails.value.length
+      const currentPageResponse = responseData.current_page || currentPage.value
+      const lastPageResponse = responseData.last_page || currentPageResponse
+      hasMore.value = currentPageResponse < lastPageResponse
 
     } catch (err) {
       error.value = err.response?.data?.message || 'Failed to fetch emails'
@@ -225,6 +242,10 @@ export function useEmails() {
     fetchEmails(false)
   }
 
+  const setCustomFetcher = (fetcher) => {
+    customFetcher.value = fetcher
+  }
+
   // Computed
   const hasActiveFilters = computed(() => {
     return filters.value.folder_id !== null ||
@@ -268,6 +289,7 @@ export function useEmails() {
     updateSearch,
     clearFilters,
     toggleSortOrder,
-    updateSortBy
+    updateSortBy,
+    setCustomFetcher
   }
 }

@@ -10,6 +10,7 @@
       :sort-order="filters.sort_order"
       :folders="folders"
       :has-active-filters="hasActiveFilters"
+      :show-folder-filter="!isViewMode"
       @update:folder="updateFilter('folder_id', $event)"
       @update:is-read="updateFilter('is_read', $event)"
       @update:has-attachments="updateFilter('has_attachments', $event)"
@@ -152,7 +153,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import {
   ExclamationCircleIcon,
   InboxIcon,
@@ -165,9 +166,19 @@ import EmailFilters from './EmailFilters.vue'
 import EmailListItem from './EmailListItem.vue'
 import EmailLoadingSkeleton from './EmailLoadingSkeleton.vue'
 import { useEmails } from '../composables/useEmails'
+import { useViews } from '../composables/useViews'
 import { useVirtualScroll } from '../composables/useVirtualScroll'
 
+const props = defineProps({
+  viewId: {
+    type: [String, Number],
+    default: null
+  }
+})
+
 const emit = defineEmits(['email-selected', 'mark-read'])
+const { getViewEmails } = useViews()
+const isViewMode = computed(() => !!props.viewId)
 
 // Email management
 const {
@@ -190,7 +201,8 @@ const {
   updateSearch,
   clearFilters,
   toggleSortOrder,
-  updateSortBy
+  updateSortBy,
+  setCustomFetcher
 } = useEmails()
 
 // Virtual scrolling
@@ -210,6 +222,44 @@ const {
 
 // Multi-select state
 const selectedEmails = ref(new Set())
+
+// Configure custom fetcher when view changes
+const configureFetcher = () => {
+  if (props.viewId) {
+    setCustomFetcher(({ page, perPage, filters: currentFilters }) => {
+      const params = {
+        page,
+        per_page: perPage,
+        sort_by: currentFilters.sort_by,
+        sort_order: currentFilters.sort_order
+      }
+
+      if (currentFilters.is_read !== null && currentFilters.is_read !== undefined) {
+        params.is_read = currentFilters.is_read
+      }
+
+      if (currentFilters.has_attachments !== null && currentFilters.has_attachments !== undefined) {
+        params.has_attachments = currentFilters.has_attachments
+      }
+
+      if (currentFilters.search) {
+        params.search = currentFilters.search
+      }
+
+      return getViewEmails(props.viewId, params)
+    })
+  } else {
+    setCustomFetcher(null)
+  }
+}
+
+watch(() => props.viewId, async (newVal, oldVal) => {
+  configureFetcher()
+  if (newVal) {
+    updateFilter('folder_id', null)
+  }
+  await refresh()
+})
 
 // Watch for near bottom to trigger infinite scroll
 watch(isNearBottom, (nearBottom) => {
@@ -266,9 +316,8 @@ const markSelectedAsRead = async (isRead) => {
 
 // Initialize
 onMounted(async () => {
-  await Promise.all([
-    fetchFolders(),
-    fetchEmails()
-  ])
+  configureFetcher()
+  await fetchFolders()
+  await fetchEmails()
 })
 </script>

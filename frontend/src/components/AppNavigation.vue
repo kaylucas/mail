@@ -28,6 +28,7 @@
             :user="user"
             :stats="stats"
             :folders="folders"
+            :views="views"
             :loading="loading"
             @close="$emit('close')"
           />
@@ -43,6 +44,7 @@
         :user="user"
         :stats="stats"
         :folders="folders"
+        :views="views"
         :loading="loading"
       />
     </div>
@@ -52,7 +54,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { TransitionRoot, TransitionChild, Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
+import { TransitionRoot, TransitionChild } from '@headlessui/vue'
 import {
   HomeIcon,
   InboxIcon,
@@ -60,11 +62,17 @@ import {
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   ChevronDownIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  TagIcon,
+  ShoppingCartIcon,
+  SparklesIcon,
+  CodeBracketIcon,
+  BuildingStorefrontIcon
 } from '@heroicons/vue/24/outline'
 import axios from '../axios'
 import { clearAuthState } from '../router/index.js'
 import UserMenu from './UserMenu.vue'
+import { useViews } from '../composables/useViews'
 
 const props = defineProps({
   isMobileOpen: {
@@ -82,6 +90,7 @@ const user = ref(null)
 const stats = ref(null)
 const folders = ref([])
 const loading = ref(true)
+const { views, fetchViews } = useViews()
 
 // Navigation items
 const navigationItems = computed(() => [
@@ -117,6 +126,7 @@ const fetchData = async () => {
     user.value = userRes.data
     stats.value = statsRes.data.data
     folders.value = foldersRes.data.data || []
+    await fetchViews()
   } catch (error) {
     console.error('Failed to load navigation data:', error)
   } finally {
@@ -149,8 +159,33 @@ onMounted(() => {
 </script>
 
 <script>
-// Sidebar Content Component (defined inline for reuse between mobile and desktop)
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import axios from '../axios'
+import { clearAuthState } from '../router/index.js'
+import UserMenu from './UserMenu.vue'
+import {
+  InboxIcon,
+  FolderIcon,
+  ArrowRightOnRectangleIcon,
+  Cog6ToothIcon,
+  PlusIcon,
+  TagIcon,
+  ShoppingCartIcon,
+  SparklesIcon,
+  CodeBracketIcon,
+  BuildingStorefrontIcon
+} from '@heroicons/vue/24/outline'
+
+const iconMap = {
+  inbox: InboxIcon,
+  folder: FolderIcon,
+  tag: TagIcon,
+  'shopping-cart': ShoppingCartIcon,
+  github: CodeBracketIcon,
+  storefront: BuildingStorefrontIcon,
+  sparkles: SparklesIcon
+}
 
 const SidebarContent = defineComponent({
   name: 'SidebarContent',
@@ -158,6 +193,7 @@ const SidebarContent = defineComponent({
     user: Object,
     stats: Object,
     folders: Array,
+    views: Array,
     loading: Boolean
   },
   emits: ['close'],
@@ -165,46 +201,49 @@ const SidebarContent = defineComponent({
     const route = useRoute()
     const router = useRouter()
 
-    // "Views" section (Placeholder for now)
-    const viewsItems = computed(() => [
-      {
-        name: 'Inbox',
-        routeName: 'Emails',
-        icon: InboxIcon,
-        badge: props.stats?.unread_emails || null
-      },
-      {
-        name: 'GitHub',
-        // Placeholder route/query for now
-        routeName: 'Emails',
-        query: { label: 'github' },
-        icon: FolderIcon, // Using FolderIcon as a placeholder for GitHub icon
-        badge: null
+    const viewsItems = computed(() => {
+      if (!props.views || props.views.length === 0) {
+        return []
       }
-    ])
 
-    // "Mail" section (Standard folders)
+      return props.views.map(view => {
+        const IconComponent = iconMap[view.icon] || FolderIcon
+        return {
+          id: view.id,
+          name: view.name,
+          icon: IconComponent,
+          color: view.color,
+          routeName: 'Emails',
+          query: { view: view.id },
+          badge: view.unread_count || view.email_count || null
+        }
+      })
+    })
+
     const mailItems = computed(() => [
       { name: 'All Mail', id: 'all', icon: InboxIcon },
-      { name: 'Sent', id: 'sent', icon: ArrowRightOnRectangleIcon }, // Using ArrowRight... as placeholder for Sent
-      { name: 'Drafts', id: 'drafts', icon: FolderIcon }, // Placeholder
-      { name: 'Spam', id: 'spam', icon: FolderIcon }, // Placeholder
-      { name: 'Trash', id: 'trash', icon: FolderIcon }, // Placeholder
+      { name: 'Sent', id: 'sent', icon: ArrowRightOnRectangleIcon },
+      { name: 'Drafts', id: 'drafts', icon: FolderIcon },
+      { name: 'Spam', id: 'spam', icon: FolderIcon },
+      { name: 'Trash', id: 'trash', icon: FolderIcon }
     ])
-
-
 
     const isActiveRoute = (routeName, query = {}) => {
       if (route.name !== routeName) return false
-      // Simple query check - if query is provided, it must match
       if (Object.keys(query).length > 0) {
-        return Object.entries(query).every(([k, v]) => route.query[k] === v)
+        return Object.entries(query).every(([k, v]) => route.query[k]?.toString() === v.toString())
       }
       return true
     }
 
-    const isActiveFolder = (folderId) => {
-      return route.name === 'Emails' && route.query.folder === folderId
+    const navigateTo = (routeName, query = {}) => {
+      router.push({ name: routeName, query })
+      emit('close')
+    }
+
+    const handleAddView = () => {
+      router.push({ name: 'ViewsManagement' })
+      emit('close')
     }
 
     const handleLogout = async () => {
@@ -221,146 +260,112 @@ const SidebarContent = defineComponent({
       }
     }
 
-    const navigateToFolder = (folderId) => {
-      router.push({ name: 'Emails', query: { folder: folderId } })
-      emit('close')
-    }
-
-    const navigateTo = (routeName, query = {}) => {
-      router.push({ name: routeName, query })
-      emit('close')
-    }
-
     return () => h('div', { class: 'flex flex-col h-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-300 border-r border-gray-200 dark:border-gray-800' }, [
-      // User Menu at top
       h('div', { class: 'flex-shrink-0 px-4 py-4' }, [
         props.user ? h(UserMenu, { user: props.user }) : h('div', { class: 'h-16 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg' })
       ]),
-
-      // Search bar placeholder
       h('div', { class: 'px-4 mb-4' }, [
-          h('div', { class: 'relative' }, [
-              h('div', { class: 'absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none' }, [
-                  h('svg', { class: 'h-4 w-4 text-gray-400 dark:text-gray-500', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-                      h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' })
-                  ])
-              ]),
-              h('input', {
-                  type: 'text',
-                  class: 'block w-full pl-10 pr-3 py-1.5 border border-transparent rounded-md leading-5 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors',
-                  placeholder: 'Search'
-              })
-          ])
-      ]),
-
-      // Main navigation
-      h('nav', { class: 'flex-1 px-2 space-y-6 overflow-y-auto' }, [
-        
-        // Views Section
-        h('div', [
-            h('h3', { class: 'px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider' }, 'Views'),
-            h('div', { class: 'mt-1 space-y-1' }, 
-                viewsItems.value.map(item => 
-                    h('button', {
-                        key: item.name,
-                        onClick: () => navigateTo(item.routeName, item.query),
-                        class: [
-                            'group w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                            isActiveRoute(item.routeName, item.query)
-                                ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-                        ]
-                    }, [
-                        h('div', { class: 'flex items-center truncate' }, [
-                            h(item.icon, { class: [
-                                'flex-shrink-0 h-5 w-5 mr-3',
-                                isActiveRoute(item.routeName, item.query) ? 'text-gray-500 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300'
-                            ]}),
-                            h('span', { class: 'truncate' }, item.name)
-                        ]),
-                        item.badge ? h('span', {
-                            class: 'inline-block py-0.5 px-2 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
-                        }, item.badge.toString()) : null
-                    ])
-                )
-            )
-        ]),
-
-        // "Add view" and "Less" buttons
-        h('div', { class: 'space-y-1' }, [
-             h('button', {
-                class: 'group w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white rounded-md'
-             }, [
-                 h('svg', { class: 'flex-shrink-0 h-5 w-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-                     h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 6v6m0 0v6m0-6h6m-6 0H6' })
-                 ]),
-                 h('span', 'Add view')
-             ]),
-             h('button', {
-                class: 'group w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white rounded-md'
-             }, [
-                 h('svg', { class: 'flex-shrink-0 h-5 w-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-                     h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M5 15l7-7 7 7' })
-                 ]),
-                 h('span', 'Less')
-             ])
-        ]),
-
-        // Mail Section
-        h('div', [
-            h('h3', { class: 'px-3 mt-6 text-xs font-semibold text-gray-500 uppercase tracking-wider' }, 'Mail'),
-            h('div', { class: 'mt-1 space-y-1' }, 
-                mailItems.value.map(item => 
-                    h('button', {
-                        key: item.id,
-                        onClick: () => {}, 
-                        class: 'group w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white rounded-md'
-                    }, [
-                        h(item.icon, { class: 'flex-shrink-0 h-5 w-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300' }),
-                        h('span', item.name)
-                    ])
-                )
-            )
-        ]),
-
-        // Settings Section
-        h('div', [
-             h('button', {
-                onClick: () => navigateTo('Settings'),
-                class: [
-                    'group w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors mt-6',
-                    isActiveRoute('Settings')
-                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
-                ]
-            }, [
-                h(Cog6ToothIcon, { class: [
-                    'flex-shrink-0 h-5 w-5 mr-3',
-                    isActiveRoute('Settings') ? 'text-gray-500 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300'
-                ]}),
-                h('span', 'Settings')
-            ]),
-            h('button', {
-                class: 'group w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white rounded-md'
-            }, [
-                 h('svg', { class: 'flex-shrink-0 h-5 w-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-                     h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' })
-                 ]),
-                 h('span', 'Support & feedback')
-            ]),
-            h('button', {
-                class: 'group w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white rounded-md'
-            }, [
-                 h('svg', { class: 'flex-shrink-0 h-5 w-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
-                     h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' })
-                 ]),
-                 h('span', 'Get macOS app')
+        h('div', { class: 'relative' }, [
+          h('div', { class: 'absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none' }, [
+            h('svg', { class: 'h-4 w-4 text-gray-400 dark:text-gray-500', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor' }, [
+              h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' })
             ])
-        ]),
-
+          ]),
+          h('input', {
+            type: 'text',
+            class: 'block w-full pl-10 pr-3 py-1.5 border border-transparent rounded-md leading-5 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 sm:text-sm transition-colors',
+            placeholder: 'Search'
+          })
+        ])
       ]),
-
-      // Logout button at bottom
+      h('nav', { class: 'flex-1 px-2 space-y-6 overflow-y-auto' }, [
+        h('div', [
+          h('div', { class: 'flex items-center justify-between px-3' }, [
+            h('h3', { class: 'text-xs font-semibold text-gray-500 uppercase tracking-wider' }, 'Views'),
+            h('button', {
+              onClick: handleAddView,
+              class: 'text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500'
+            }, 'Manage')
+          ]),
+          h('div', { class: 'mt-1 space-y-1' }, (
+            viewsItems.value.length ? viewsItems.value : [{ name: 'Inbox', icon: InboxIcon, routeName: 'Emails', query: {}, badge: props.stats?.unread_emails }]
+          ).map(item =>
+            h('button', {
+              key: item.id || item.name,
+              onClick: () => navigateTo(item.routeName, item.query),
+              class: [
+                'group w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                isActiveRoute(item.routeName, item.query)
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+              ]
+            }, [
+              h('div', { class: 'flex items-center truncate' }, [
+                h(item.icon, {
+                  class: [
+                    'flex-shrink-0 h-5 w-5 mr-3',
+                    item.color ? '' : isActiveRoute(item.routeName, item.query) ? 'text-gray-500 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300'
+                  ],
+                  style: item.color ? { color: item.color } : null
+                }),
+                h('span', { class: 'truncate' }, item.name)
+              ]),
+              item.badge ? h('span', {
+                class: 'inline-block py-0.5 px-2 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+              }, item.badge.toString()) : null
+            ])
+          ))
+        ]),
+        h('div', { class: 'space-y-1' }, [
+          h('button', {
+            onClick: handleAddView,
+            class: 'group w-full flex items-center px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white rounded-md'
+          }, [
+            h(PlusIcon, { class: 'flex-shrink-0 h-5 w-5 mr-3 text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300' }),
+            h('span', 'Add view')
+          ])
+        ]),
+        h('div', [
+          h('h3', { class: 'px-3 mt-6 text-xs font-semibold text-gray-500 uppercase tracking-wider' }, 'Mail'),
+          h('div', { class: 'mt-1 space-y-1 flex flex-col' }, mailItems.value.map(item =>
+            h('button', {
+              key: item.id,
+              onClick: () => navigateTo('Emails', { folder: item.id }),
+              class: [
+                'group w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                isActiveRoute('Emails', { folder: item.id })
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+              ]
+            }, [
+              h(item.icon, {
+                class: [
+                  'flex-shrink-0 h-5 w-5 mr-3',
+                  isActiveRoute('Emails', { folder: item.id }) ? 'text-gray-500 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300'
+                ]
+              }),
+              h('span', item.name)
+            ])
+          ))
+        ]),
+        h('div', [
+          h('button', {
+            onClick: () => navigateTo('Settings'),
+            class: [
+              'group w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors mt-6',
+              isActiveRoute('Settings')
+                ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+            ]
+          }, [
+            h(Cog6ToothIcon, { class: [
+              'flex-shrink-0 h-5 w-5 mr-3',
+              isActiveRoute('Settings') ? 'text-gray-500 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-300'
+            ] }),
+            h('span', 'Settings')
+          ])
+        ])
+      ]),
       h('div', { class: 'flex-shrink-0 px-4 py-4 border-t border-gray-200 dark:border-gray-800' }, [
         h('button', {
           onClick: handleLogout,

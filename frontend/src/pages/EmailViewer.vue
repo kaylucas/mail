@@ -76,6 +76,12 @@
             />
           </div>
         </div>
+
+        <!-- Email Reply Component -->
+        <EmailReply
+          :email="email"
+          @send="handleSendReply"
+        />
       </div>
     </div>
   </AppLayout>
@@ -91,6 +97,7 @@ import EmailHeader from '../components/EmailHeader.vue'
 import EmailBody from '../components/EmailBody.vue'
 import EmailAttachments from '../components/EmailAttachments.vue'
 import EmailRuleTestResults from '../components/EmailRuleTestResults.vue'
+import EmailReply from '../components/EmailReply.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -233,6 +240,16 @@ const testEmailRules = async () => {
  */
 const handleRetest = () => {
   testEmailRules()
+}
+
+/**
+ * Handle sending a reply
+ */
+const handleSendReply = (replyData) => {
+  console.log('Sending reply:', replyData)
+  // Here we would call the API to send the email
+  // For now, we'll just log it and maybe show a toast if we had one
+  alert('Reply sent! (Mock)')
 }
 
 onMounted(() => {
