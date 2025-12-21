@@ -400,6 +400,155 @@ CORS_ALLOWED_ORIGINS=https://your-production-domain.com
 
 **Note:** This setup is optimized for local development with fast frontend iteration.
 
+## CircleCI Deployment
+
+This project uses CircleCI for continuous integration and deployment. The CI/CD pipeline automatically runs tests on all branches and deploys to staging when changes are pushed to the `staging` branch.
+
+### CI/CD Pipeline Overview
+
+The pipeline consists of the following stages:
+
+1. **Build CI Image** - Builds the Docker image from `docker/ci/Dockerfile`
+2. **Audit** - Checks Composer dependencies for security vulnerabilities
+3. **Test** - Runs the full test suite with MariaDB
+4. **Build** - Installs production dependencies and builds frontend assets
+5. **Deploy** - Deploys to staging server via rsync
+6. **Migrate** - Runs database migrations (requires manual approval)
+
+### Prerequisites
+
+Before setting up CircleCI deployment:
+
+1. **CircleCI Account** - Connect your repository to CircleCI
+2. **SSH Key** - Generate and add SSH key for staging server access
+3. **Environment Variables** - Configure in CircleCI project settings
+4. **Staging Server** - Prepare server with PHP, Composer, and database
+
+### Required CircleCI Environment Variables
+
+Configure these in your CircleCI project settings (Project Settings > Environment Variables):
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `STAGING_REMOTE_ADDR` | SSH address for staging | `ci@staging.example.com` |
+| `STAGING_REMOTE_DIR` | Application directory | `/home/ci/mail` |
+
+The staging server should have its own `.env` file with production-appropriate values for:
+- Database credentials (`DB_*`)
+- Office365 credentials (`OFFICE365_*`)
+- Webhook configuration (`WEBHOOK_*`)
+- AI provider API keys (`ANTHROPIC_API_KEY`, etc.)
+
+### SSH Key Setup
+
+1. **Generate SSH key pair** (if needed):
+   ```bash
+   ssh-keygen -t ed25519 -C "circleci-deploy" -f ~/.ssh/circleci_deploy
+   ```
+
+2. **Add public key to staging server**:
+   ```bash
+   # Copy the public key
+   cat ~/.ssh/circleci_deploy.pub
+
+   # On staging server, add to authorized_keys
+   echo "ssh-ed25519 AAAA... circleci-deploy" >> ~/.ssh/authorized_keys
+   ```
+
+3. **Add private key to CircleCI**:
+   - Go to Project Settings > SSH Keys
+   - Click "Add SSH Key"
+   - Paste the private key content
+   - Note the fingerprint (e.g., `SHA256:abc123...`)
+
+4. **Update `.circleci/config.yml`**:
+   - Replace the placeholder fingerprint with your actual fingerprint
+   - Update `remote_addr` and `remote_dir` with your staging server details
+
+### Deployment Workflow
+
+**Automatic Deployment (staging branch):**
+
+1. Push changes to `staging` branch
+2. CircleCI automatically:
+   - Builds CI Docker image
+   - Runs security audit and tests
+   - Builds application with production dependencies
+   - Deploys to staging server via rsync
+   - Runs post-deploy script (cache clearing, optimization)
+3. After deployment succeeds, approve migrations in CircleCI UI
+4. Migrations run on approval
+
+**Manual Deployment:**
+
+For other branches, the build and test steps run automatically, but deployment requires manual configuration.
+
+### Post-Deploy Script
+
+The post-deploy script (`.circleci/post-deploy.sh`) runs on the staging server after rsync completes:
+
+**Deploy operation:**
+- Installs Composer dependencies (production mode)
+- Clears and rebuilds Laravel caches
+- Optimizes autoloader
+- Sets proper file permissions
+- Restarts queue workers
+
+**Migrate operation:**
+- Runs database migrations with `--force` flag
+
+### Running Migrations
+
+Migrations require manual approval to prevent accidental data changes:
+
+1. Wait for deployment to complete
+2. Go to CircleCI workflow view
+3. Click "approve-migrate-staging" approval job
+4. Click "Approve" to run migrations
+5. Monitor migration job for any errors
+
+**Best Practices:**
+- Review migrations before approving
+- Test migrations on local database first
+- Have a rollback plan for destructive migrations
+
+### Troubleshooting
+
+**SSH Connection Failures:**
+- Verify SSH key fingerprint in config matches CircleCI
+- Check that public key is in server's `authorized_keys`
+- Test SSH connection locally: `ssh ci@staging.example.com`
+
+**Build Failures:**
+- Check CI Docker image builds successfully
+- Verify `pnpm-lock.yaml` is committed
+- Check for Composer dependency conflicts
+
+**Deployment Failures:**
+- Verify rsync exclusions in `.rsyncignore`
+- Check server permissions on target directory
+- Ensure post-deploy script has execute permissions
+
+**Migration Failures:**
+- Check database credentials in server's `.env`
+- Verify database connection from server
+- Review migration files for errors
+
+**Test Failures:**
+- Check MariaDB service is starting correctly
+- Verify `.env.example` has required test values
+- Review test output for specific failures
+
+### File Structure
+
+```
+.circleci/
+├── config.yml      # CircleCI pipeline configuration
+└── post-deploy.sh  # Post-deployment script (runs on server)
+.rsyncignore        # Files excluded from deployment
+.env.test           # Test environment configuration
+```
+
 ### Troubleshooting
 
 **"Cannot access mail.loc":**

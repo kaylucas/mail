@@ -1,0 +1,132 @@
+# =============================================================================
+# rsync Exclusion File for Deployment
+# =============================================================================
+# This file specifies patterns to exclude when deploying via rsync.
+# Used by: .circleci/config.yml deploy job
+# Command: rsync --exclude-from=.rsyncignore
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Version Control
+# -----------------------------------------------------------------------------
+.git/
+.gitattributes
+.gitignore
+
+# -----------------------------------------------------------------------------
+# CI/CD Configuration (except post-deploy.sh)
+# -----------------------------------------------------------------------------
+.github/
+# Note: .circleci/post-deploy.sh is needed on server, so we don't exclude entire .circleci/
+
+# -----------------------------------------------------------------------------
+# Node.js / Frontend Build
+# -----------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+pnpm-lock.yaml
+package.json
+frontend/package.json
+frontend/pnpm-lock.yaml
+
+# -----------------------------------------------------------------------------
+# Frontend Source (already built to public/build)
+# -----------------------------------------------------------------------------
+frontend/src/
+frontend/public/
+frontend/index.html
+frontend/vite.config.js
+frontend/tsconfig*.json
+frontend/postcss.config.js
+frontend/tailwind.config.js
+frontend/.env*
+vite.config.js
+resources/js/
+resources/css/
+
+# -----------------------------------------------------------------------------
+# PHP Dependencies (installed on server)
+# Note: vendor/ is included since it's persisted from workspace
+# -----------------------------------------------------------------------------
+# vendor/ - Keep this, it's deployed from CI workspace
+
+# -----------------------------------------------------------------------------
+# Testing
+# -----------------------------------------------------------------------------
+tests/
+phpunit.xml
+phpunit.xml.dist
+.phpunit.result.cache
+test-results/
+
+# -----------------------------------------------------------------------------
+# Environment Files (server has its own)
+# -----------------------------------------------------------------------------
+.env
+.env.example
+.env.test
+.env.testing
+.env.ai-example
+.env.local
+.env.*.local
+
+# -----------------------------------------------------------------------------
+# Docker Configuration
+# -----------------------------------------------------------------------------
+docker/
+docker-compose.yml
+docker-compose*.yml
+docker-compose.override.yml
+.dockerignore
+Dockerfile
+
+# -----------------------------------------------------------------------------
+# Storage (server has its own state)
+# -----------------------------------------------------------------------------
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+storage/debugbar/*
+storage/app/public/*
+!storage/app/public/.gitignore
+!storage/logs/.gitignore
+!storage/framework/cache/.gitignore
+!storage/framework/sessions/.gitignore
+!storage/framework/views/.gitignore
+
+# -----------------------------------------------------------------------------
+# Bootstrap Cache
+# -----------------------------------------------------------------------------
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+
+# -----------------------------------------------------------------------------
+# Documentation
+# -----------------------------------------------------------------------------
+*.md
+docs/
+README*
+CHANGELOG*
+LICENSE*
+
+# -----------------------------------------------------------------------------
+# IDE / Editor
+# -----------------------------------------------------------------------------
+.editorconfig
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# -----------------------------------------------------------------------------
+# Misc
+# -----------------------------------------------------------------------------
+scripts/
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

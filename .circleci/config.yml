@@ -1,0 +1,221 @@
+version: 2.1
+
+executors:
+  test:
+    resource_class: medium
+    docker:
+      - image: 'ghcr.io/aery-software/propyro-api:ci'
+        auth:
+          username: $GHCR_USERNAME
+          password: $GHCR_PASSWORD
+  main:
+    resource_class: small
+    docker:
+      - image: 'ghcr.io/aery-software/propyro-api:ci'
+        auth:
+          username: $GHCR_USERNAME
+          password: $GHCR_PASSWORD
+  deploy:
+    machine: true
+    resource_class: aery-software/staging
+
+commands:
+  install_dependencies:
+    parameters:
+      production:
+        type: boolean
+        default: false
+    steps:
+      - restore_cache:
+          key: &composer-cache-key v1-composer-{{ checksum "composer.lock" }}
+      - when:
+          condition: <<parameters.production>>
+          steps:
+            - run:
+                name: Installing dependencies
+                command: |
+                  composer install --no-scripts --classmap-authoritative --no-dev
+      - unless:
+          condition: <<parameters.production>>
+          steps:
+            - run:
+                name: Installing dependencies
+                command: |
+                  composer install --no-scripts --classmap-authoritative
+      - save_cache:
+          key: *composer-cache-key
+          paths:
+            - '~/.composer/cache'
+
+  install_frontend_dependencies:
+    steps:
+      - restore_cache:
+          keys:
+            - pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+            - pnpm-v1-
+      - run:
+          name: Installing frontend dependencies
+          command: |
+            pnpm install --frozen-lockfile
+      - save_cache:
+          key: pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - node_modules
+
+  build_frontend:
+    steps:
+      - run:
+          name: Building frontend assets
+          command: |
+            pnpm run build
+
+jobs:
+  audit:
+    executor: main
+    steps:
+      - checkout
+      - run:
+          name: Auditing dependencies
+          command: |
+            composer audit --locked --format=plain
+
+  test:
+    executor: test
+    environment:
+      APP_ENV: testing
+    steps:
+      - checkout
+      - install_dependencies
+      - install_frontend_dependencies
+      - build_frontend
+      - run:
+          name: Copy environment file
+          command: |
+            cp .env.example .env
+      - run:
+          name: Clearing cache
+          command: |
+            php artisan cache:clear
+      - run:
+          name: Generating application key
+          command: |
+            php artisan key:generate
+      - run:
+          name: Running database migrations
+          command: |
+            php artisan migrate --force
+      - run:
+          name: Running tests
+          command: |
+            mkdir test-results
+            php artisan test --parallel
+      - store_test_results:
+          path: test-results
+
+  build:
+    executor: main
+    steps:
+      - checkout
+      - install_dependencies:
+          production: true
+      - install_frontend_dependencies
+      - build_frontend
+      - persist_to_workspace:
+          root: .
+          paths:
+            - 'vendor'
+            - 'public/build'
+
+  deploy:
+    executor: deploy
+    parameters:
+      remote_addr:
+        type: string
+      remote_dir:
+        type: string
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - add_ssh_keys:
+          fingerprints:
+            - 'SHA256:h3DPlQZ5IaaWjeG56wjt12L6OOwQ7SDICTZqEh+IXfc'
+      - run:
+          name: Uploading files
+          command: |
+            chmod 755 ./
+            rsync -rlptvz --exclude-from=.rsyncignore --delete ./ "<<parameters.remote_addr>>:<<parameters.remote_dir>>/"
+      - run:
+          name: Running post-deploy script
+          command: |
+            ssh <<parameters.remote_addr>> "<<parameters.remote_dir>>/.circleci/post-deploy.sh '<<pipeline.git.branch>>'"
+
+  migrate:
+    executor: deploy
+    parameters:
+      remote_addr:
+        type: string
+      remote_dir:
+        type: string
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - 'SHA256:h3DPlQZ5IaaWjeG56wjt12L6OOwQ7SDICTZqEh+IXfc'
+      - run:
+          name: Running migrations
+          command: |
+            ssh <<parameters.remote_addr>> "<<parameters.remote_dir>>/.circleci/post-deploy.sh '<<pipeline.git.branch>>' migrate"
+
+workflows:
+  mail:
+    jobs:
+      # Security audit
+      - audit:
+          context:
+            - ghcr
+
+      # Test
+      - test:
+          context:
+            - ghcr
+
+      # Build
+      - build:
+          filters:
+            branches:
+              only:
+                - main
+                - staging
+          context:
+            - ghcr
+
+      # Deploy to staging
+      - deploy:
+          name: deploy-staging
+          filters:
+            branches:
+              only: &staging-branches
+                - staging
+          requires:
+            - build
+          remote_addr: &staging-remote-addr 'ci@staging.aery.work'
+          remote_dir: &staging-remote-dir '/home/ci/stacks/mail'
+
+      - approve-migrate-staging:
+          type: approval
+          filters:
+            branches:
+              only: *staging-branches
+          requires:
+            - deploy-staging
+
+      - migrate:
+          name: migrate-staging
+          filters:
+            branches:
+              only: *staging-branches
+          requires:
+            - approve-migrate-staging
+            - deploy-staging
+          remote_addr: *staging-remote-addr
+          remote_dir: *staging-remote-dir
